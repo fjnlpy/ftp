@@ -1,0 +1,5 @@
+*.code-workspace
+build/
+vsftpd/
+.vscode/
+doc/TODO.md
