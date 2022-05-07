@@ -19,12 +19,14 @@ clean:
 	rm -r build
 
 ## Dir targets
+# TODO: apparently not meant to make an explicit target
+#  for directory creation.
 $(BUILDDIR):
-	mkdir $@
+	mkdir -p $@
 
 BUILDFTPDIR := $(BUILDDIR)/$(FTPDIR)
 $(BUILDFTPDIR): $(BUILDDIR)
-	mkdir $@
+	mkdir -p $@
 
 ## Client.cpp targets
 CLIENTCPP := $(SRCDIR)/$(FTPDIR)/Client.cpp
