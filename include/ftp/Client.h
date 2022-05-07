@@ -37,6 +37,8 @@ public:
 
   bool quit();
 
+  bool stor(const std::string &path);
+
 
 private:
 

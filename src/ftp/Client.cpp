@@ -1,10 +1,13 @@
 #include "ftp/Client.h"
 
 #include <sstream>
+#include <filesystem>
+#include <regex>
 
 #include "util/util.hpp"
 
 using boost::asio::ip::tcp;
+using namespace std::filesystem;
 
 namespace
 {
@@ -70,6 +73,40 @@ try {
 }
 
 }
+
+std::optional<std::string>
+parsePasv(const std::string &pasvResponse)
+{
+  if (pasvResponse.substr(0, 3) != "227") {
+    // The PASV request failed (or is malformed) so we can't
+    // extract the port information.
+    return {};
+  }
+
+  // Regex for finding the port information. Usually it's also wrapped in perenthesis
+  // but according to RFC1123 section 4.1.2.6 we can't rely on that (or even that
+  // it's comma-separated, but we will assume so here).
+  const std::regex portRegex(
+    R"((\d+),(\d+),(\d+),(\d+),(\d+),(\d+))"
+  );
+
+  // Look for a match where all the sub-groups also matched.
+  std::smatch matches;
+  if (std::regex_search(pasvResponse, matches, portRegex) && matches.size() == 7
+        && matches[1].matched && matches[2].matched && matches[3].matched
+        && matches[4].matched && matches[5].matched && matches[6].matched
+  ) {
+    return matches[1].str() + "." + matches[2].str() + "." + matches[3].str() + "." + matches[4].str()
+          // 5th and 6th parts are the upper and lower eight bits of the port number.
+          // Convert them to ints, combine them into one value, then convert back to a string.
+            + ":" + std::to_string(std::stoi(matches[5]) * 256 + std::stoi(matches[6]));
+  } else {
+
+    // No matches. Can't find the port information.
+    return {};
+  }
+}
+
 }
 
 namespace ftp
@@ -131,6 +168,46 @@ Client::quit()
   asio::closeSocket(controlSocket_);
   // TODO: handle errors.
   return true;
+}
+
+bool
+Client::stor(const std::string &pathToFile)
+{
+try {
+  path path(pathToFile);
+  if (exists(path)) {
+
+    // Set correct transfer type and request a passive connection.
+    // We use passive connections so that we don't need to set up any
+    // port forwarding to let the server open connections to us.
+    asio::sendCommand(controlSocket_, "TYPE I\r\n");
+    LOG(asio::receiveResponse(controlSocket_));
+    asio::sendCommand(controlSocket_, "PASV\r\n");
+    const std::string response = asio::receiveResponse(controlSocket_);
+    LOG(response);
+
+    // Determine which port to use by parsing the response, and open a data
+    // connection to that port.
+    auto parsedResponse = parsePasv(response);
+    if (parsedResponse) {
+      LOG("PASV port: " << *parsedResponse);
+    } else {
+      LOG("Couldn't parse response :(");
+    }
+
+    // TODO: open the file as a stream
+
+    // TODO: send the file with asio
+
+    // TODO: what if something goes wrong?
+
+    return true; // TODO:
+  } else {
+    return false;
+  }
+} catch (const filesystem_error &e) {
+  return false;
+}
 }
 
 }
