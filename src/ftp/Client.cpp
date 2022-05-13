@@ -17,13 +17,19 @@ bool
 connect(
   boost::asio::io_context &ioContext,
   tcp::socket &socket,
-  const std::string &url
+  const std::string &host,
+  const std::string &port
 ) {
 try {
-  auto endpoints = tcp::resolver(ioContext).resolve(url, "ftp");
+  auto endpoints = tcp::resolver(ioContext).resolve(host, port);
   boost::asio::connect(socket, std::move(endpoints));
   return true;
 } catch (const std::exception &e) {
+  LOG(
+    "Could not make connection. host=" << host
+    << "; port=" << port
+    << "; error=" << e.what()
+  );
   return false;
 }
 }
@@ -74,7 +80,7 @@ try {
 
 }
 
-std::optional<std::string>
+std::optional<std::pair<std::string, std::string>>
 parsePasv(const std::string &pasvResponse)
 {
   if (pasvResponse.substr(0, 3) != "227") {
@@ -96,12 +102,12 @@ parsePasv(const std::string &pasvResponse)
         && matches[1].matched && matches[2].matched && matches[3].matched
         && matches[4].matched && matches[5].matched && matches[6].matched
   ) {
-    return matches[1].str() + "." + matches[2].str() + "." + matches[3].str() + "." + matches[4].str()
-          // 5th and 6th parts are the upper and lower eight bits of the port number.
-          // Convert them to ints, combine them into one value, then convert back to a string.
-            + ":" + std::to_string(std::stoi(matches[5]) * 256 + std::stoi(matches[6]));
+    const std::string host(matches[1].str() + "." + matches[2].str() + "." + matches[3].str() + "." + matches[4].str());
+    // 5th and 6th parts are the upper and lower eight bits of the port number.
+    // Convert them to ints, combine them into one value, then convert back to a string.
+    const std::string port = std::to_string(std::stoi(matches[5]) * 256 + std::stoi(matches[6]));
+    return std::make_pair(std::move(host), std::move(port));
   } else {
-
     // No matches. Can't find the port information.
     return {};
   }
@@ -118,10 +124,10 @@ ftp::Client::Client():
 { }
 
 bool
-Client::connect(const std::string &url)
+Client::connect(const std::string &host)
 {
   // TODO: what if we're already connected? maybe fail?
-  bool connected = asio::connect(ioContext_, controlSocket_, url);
+  bool connected = asio::connect(ioContext_, controlSocket_, host, "ftp");
   if (connected) {
     // TODO: what if we get told to delay?
     // Receive the welcome message from the server.
