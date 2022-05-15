@@ -1,6 +1,8 @@
 #include "ftp/Client.h"
 
 #include <sstream>
+#include <fstream>
+#include <iostream>
 #include <filesystem>
 #include <regex>
 #include <utility>
@@ -8,8 +10,9 @@
 
 #include "util/util.hpp"
 
+#define DEBUG
+
 using boost::asio::ip::tcp;
-using namespace std::filesystem;
 
 namespace
 {
@@ -65,6 +68,71 @@ try {
   return boost::asio::write(socket, boost::asio::buffer(command, command.size()));
 } catch (const std::exception &e) {
   return 0;
+}
+}
+
+bool
+sendFile(tcp::socket &socket, const std::filesystem::path &filePath)
+{
+  assert(exists(filePath) && (is_regular_file(filePath) || is_character_file(filePath)));
+try
+{
+  std::ifstream fileStream(filePath, std::ios::binary);
+  if (!fileStream) {
+    LOG("Could not open filestream; path=" << filePath);
+    return false;
+  }
+
+  // Reset gcount before the loop starts.
+  fileStream.peek();
+
+  constexpr size_t chunkSize = 1024;
+  std::array<char, chunkSize> buf;
+
+  // Send 1KB chunks until the stream fails.
+  LOG("Sending file: chunkSize=" << chunkSize);
+  while (fileStream.read(buf.data(), chunkSize)) {
+    #ifdef DEBUG
+    LOG("===NEW CHUNK===");
+    for (size_t i = 0; i < chunkSize; ++i) {
+      std::cerr << buf[i];
+    }
+    std::cerr << std::endl;
+    LOG("===END CHUNK===");
+    #endif
+    // Assume if anything goes wrong an exception will be thrown i.e. no need
+    // to check return value.
+    boost::asio::write(socket, boost::asio::buffer(buf, fileStream.gcount()));
+  }
+
+  if (!fileStream.eof()) {
+    // The stream didn't fail because of reaching the end of the file, so
+    // something went wrong.
+    // TODO: how do we tell the server that file is useless / not complete?
+    LOG("File stream did not complete correctly. Stopping.");
+    return false;
+  } else {
+    LOG("Reached EOF.");
+    // We reached eof. Send any data that was read in the final read operation.
+    if (fileStream.gcount()) {
+      LOG("Sending extra data: gcount=" << fileStream.gcount());
+
+      #ifdef DEBUG // TODO: avoid repeating this debug printing code; maybe define an ostream for array<char,size>?
+      LOG("===NEW CHUNK===");
+      for (size_t i = 0; i < fileStream.gcount(); ++i) {
+        std::cerr << buf[i];
+      }
+      std::cerr << std::endl;
+      LOG("===END CHUNK===");
+      #endif
+
+      boost::asio::write(socket, boost::asio::buffer(buf, fileStream.gcount()));
+    }
+    return true;
+  }
+} catch (const std::exception &e) {
+  LOG("Error while sending file. error=" << e.what());
+  return false;
 }
 }
 
@@ -206,41 +274,70 @@ Client::quit()
 }
 
 bool
-Client::stor(const std::string &pathToFile)
-{
+Client::stor(const std::string &filePath, const std::string &destination)
+{ // TODO: try-catch still needed?
 try {
-  path path(pathToFile);
-  if (exists(path)) {
-
-    // Set correct transfer type and request a passive connection.
-    // We use passive connections so that we don't need to set up any
-    // port forwarding to let the server open connections to us.
-    asio::sendCommand(controlSocket_, "TYPE I\r\n");
-    LOG(asio::receiveResponse(controlSocket_));
-    asio::sendCommand(controlSocket_, "PASV\r\n");
-    const std::string response = asio::receiveResponse(controlSocket_);
-    LOG(response);
-
-    // Determine which port to use by parsing the response, and open a data
-    // connection to that port.
-    auto parsedResponse = parsePasv(response);
-    if (parsedResponse) {
-      LOG("PASV port: " << *parsedResponse);
-    } else {
-      LOG("Couldn't parse response :(");
-    }
-
-    // TODO: open the file as a stream
-
-    // TODO: send the file with asio
-
-    // TODO: what if something goes wrong?
-
-    return true; // TODO:
-  } else {
+  std::filesystem::path path(filePath);
+  if (!exists(path)) {
     return false;
   }
-} catch (const filesystem_error &e) {
+
+  // Set correct transfer type and request a passive connection.
+  // We use passive connections so that we don't need to set up any
+  // port forwarding to let the server open connections to us.
+  asio::sendCommand(controlSocket_, "TYPE I\r\n");
+  LOG(asio::receiveResponse(controlSocket_));
+  asio::sendCommand(controlSocket_, "PASV\r\n");
+  const std::string pasvResponse = asio::receiveResponse(controlSocket_);
+  LOG(pasvResponse);
+
+  // Determine which port to use by parsing the response, and open a data
+  // connection to that port.
+  auto parsedResponse = parsePasv(pasvResponse);
+  if (!parsedResponse) {
+    return false;
+  }
+  LOG("Parsed response: host=" << parsedResponse->first << "; port=" << parsedResponse->second);
+  // TODO: threading considerations?
+  tcp::socket dataSocket(ioContext_);
+  if (!asio::connect(ioContext_, dataSocket, parsedResponse->first, parsedResponse->second)) {
+    return false;
+  }
+  LOG("Data socket connected.");
+
+  // Send a store request and see if the server will accept.
+  std::ostringstream storCommand;
+  storCommand << "STOR " << destination << "\r\n";
+  asio::sendCommand(controlSocket_, storCommand.str());
+  const std::string storResponse = asio::receiveResponse(controlSocket_);
+  LOG(storResponse);
+  // a 1xx reply means we can proceed. Anything else means the server won't accept our file.
+  if (storResponse.size() == 0 || storResponse[0] != '1') {
+    return false;
+  }
+
+  // Try and send the file over the data connection.
+  // Note we don't check the return type because we will use the server's response to
+  // decide if the upload succeeded.
+  bool isSent = asio::sendFile(dataSocket, path);
+  LOG("File sent across data socket: isSent=" << (isSent ? "true" : "false"));
+
+  // Close data coonection if not closed, and read the server's response.
+  // We need to close explicitly here in case the file-sending failed but the connection remained
+  // open. Otherwise, the server won't say anything on the control connection.
+  // Note if we do that the server may consider the upload to have succeeded and send a positive
+  // response (e.g. if we partially sent the file).
+  if (dataSocket.is_open()) {
+    LOG("Data connection still open. Closing.");
+    asio::closeSocket(dataSocket);
+  }
+  const std::string fileSendResponse = asio::receiveResponse(controlSocket_);
+  // TODO: what i something goes wrong on our end after we've sent some bytes, and the server thinks
+  // we've sent the whole file and so sends a positive response? Do we then tell it to delete the
+  // file?
+  LOG(fileSendResponse);
+  return isSent && fileSendResponse.size() > 0 && fileSendResponse[0] == '2';
+} catch (const std::filesystem::filesystem_error &e) {
   return false;
 }
 }

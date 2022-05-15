@@ -37,7 +37,7 @@ public:
 
   bool quit();
 
-  bool stor(const std::string &path);
+  bool stor(const std::string &filePath, const std::string &destination);
 
   std::optional<std::string> pwd();
 
