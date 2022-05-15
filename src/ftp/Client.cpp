@@ -3,6 +3,8 @@
 #include <sstream>
 #include <filesystem>
 #include <regex>
+#include <utility>
+#include <string>
 
 #include "util/util.hpp"
 
@@ -113,6 +115,33 @@ parsePasv(const std::string &pasvResponse)
   }
 }
 
+std::optional<std::string>
+parsePwdResponse(const std::string &response)
+{
+  if (response.substr(0, 3) != "257") {
+    // Response indicates failure.
+    return {};
+  }
+
+  // The response should be of the form `257<sp>"<dir>"[<other stuff>]\r\n`
+  // Use regex to extract the part between the quotes.
+  // TODO: how to handle "quote doubling" convention, or other possible conventions for nested
+  //   qoutations (e.g. escape characters) without accidentally grabbing too much?
+
+  // Note we match the longest substring which is inside quotes. That should handle any nested
+  // quoting but may cause problems if there are quotes elsewhere in the message.
+  const std::regex regex(
+    R"(257 \"(.*)\".*)"
+  );
+
+  std::smatch matches;
+  if (std::regex_search(response, matches, regex) && matches.size() == 2) {
+    return matches[1].str();
+  } else {
+    return {};
+  }
+}
+
 }
 
 namespace ftp
@@ -214,6 +243,39 @@ try {
 } catch (const filesystem_error &e) {
   return false;
 }
+}
+
+std::optional<std::string>
+Client::pwd()
+{
+  asio::sendCommand(controlSocket_, "PWD\r\n");
+  const std::string response = asio::receiveResponse(controlSocket_);
+  LOG(response);
+  return parsePwdResponse(response);
+}
+
+bool
+Client::cwd(const std::string &newDir)
+{
+  std::ostringstream cwdCommand;
+  cwdCommand << "CWD " << newDir << "\r\n";
+  asio::sendCommand(controlSocket_, cwdCommand.str());
+  const std::string response = asio::receiveResponse(controlSocket_);
+  LOG(response);
+  return response.size() > 0 && response[0] == '2';
+}
+
+bool
+Client::mkd(const std::string &newDir)
+{
+  // TODO: this should forward the response
+  // TODO: fails if it already exists? problem?
+  std::ostringstream mkdCommand;
+  mkdCommand << "MKD " << newDir << "\r\n";
+  asio::sendCommand(controlSocket_, mkdCommand.str());
+  const std::string response = asio::receiveResponse(controlSocket_);
+  LOG(response);
+  return response.size() > 0 && response[0] == '2';
 }
 
 }

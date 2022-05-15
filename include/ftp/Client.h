@@ -39,6 +39,13 @@ public:
 
   bool stor(const std::string &path);
 
+  std::optional<std::string> pwd();
+
+  bool cwd(const std::string &newDir);
+
+  // TODO: should forward the response, since it contains the server's
+  //  understanding of the path for the created dir.
+  bool mkd(const std::string &newDir);
 
 private:
 
