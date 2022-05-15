@@ -137,6 +137,22 @@ try
 }
 
 bool
+retrieveFile(tcp::socket &socket, const std::filesystem::path &filePath)
+{
+  assert(!exists(filePath));
+try {
+
+  // TODO: create a binary ostream and check it succeeded. It should create the file for us (check this!)
+
+  // TODO: reading the socket and stuff... read_some into a std::array?
+
+} catch (const std::exception &e) {
+  LOG("Error while receiving file. error=" << e.what());
+  return false;
+}
+}
+
+bool
 closeSocket(tcp::socket &socket)
 {
 try {
@@ -322,6 +338,54 @@ try {
   LOG(fileSendResponse);
   return isSent && fileSendResponse.size() > 0 && fileSendResponse[0] == '2';
 } catch (const std::filesystem::filesystem_error &e) {
+  return false;
+}
+}
+
+bool
+Client::retr(const std::string &source, const std::string &destination)
+{
+try {
+  // Check that the destination is valid.
+  const std::filesystem::path destPath(destination);
+  // We won't create directories leading up to the destination file, so if they don't exist then fail.
+  // This method can do some funky things if the path contains '.' or '..' (specifically this may not
+  // actually be the 'parent' directory -- it may be the same directory or even a child);
+  // I think based on this use case it should behave correctly. If not, we may need to canonicalize
+  // paths before using them.
+  // Note this call can throw implementation-defined exceptions, presumably of
+  // type std::filesystem::filesystem_error.
+  const std::filesystem::path parentPath = destPath.parent_path();
+  const bool isValidDest = exists(parentPath) && is_directory(parentPath) && !exists(destPath);
+  if (!isValidDest) {
+    LOG("Not a valid destination: " << destination);
+    return false;
+  }
+
+  // Try and set up data connection.
+  auto maybeDataSocket = setupDataConnection();
+  if (!maybeDataSocket) {
+    return false;
+  }
+  tcp::socket &dataSocket = *maybeDataSocket;
+
+  // Send RETR request and view the response.
+  // This may fail if e.g. we don't permission or the file doesn't exist on the server.
+  std::ostringstream retrCommand;
+  retrCommand << "RETR " << source << "\r\n";
+  asio::sendCommand(controlSocket_, retrCommand.str());
+  const std::string retrResponse = asio::receiveResponse(controlSocket_);
+  LOG(retrResponse);
+  if (retrResponse.size() == 0 || retrResponse[0] != '1') {
+    return false;
+  }
+
+  // TODO: retrieve file on data connection and save (asio helper)
+  bool isReceived = asio::receiveFile(dataSocket, destination);
+
+  // TODO: check post-conditions and return
+} catch (const std::filesystem::filesystem_error &e) {
+  LOG("Error while retrieving file: error=" << e.what());
   return false;
 }
 }

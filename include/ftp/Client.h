@@ -39,6 +39,9 @@ public:
 
   bool stor(const std::string &filePath, const std::string &destination);
 
+  // TODO: rename these to serverDest/Src and localDest/Src for these two commands?
+  bool retr(const std::string &source, const std::string &destination);
+
   std::optional<std::string> pwd();
 
   bool cwd(const std::string &newDir);
