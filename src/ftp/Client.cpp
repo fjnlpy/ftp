@@ -172,10 +172,10 @@ parsePasv(const std::string &pasvResponse)
         && matches[1].matched && matches[2].matched && matches[3].matched
         && matches[4].matched && matches[5].matched && matches[6].matched
   ) {
-    const std::string host(matches[1].str() + "." + matches[2].str() + "." + matches[3].str() + "." + matches[4].str());
+    std::string host(matches[1].str() + "." + matches[2].str() + "." + matches[3].str() + "." + matches[4].str());
     // 5th and 6th parts are the upper and lower eight bits of the port number.
     // Convert them to ints, combine them into one value, then convert back to a string.
-    const std::string port = std::to_string(std::stoi(matches[5]) * 256 + std::stoi(matches[6]));
+    std::string port = std::to_string(std::stoi(matches[5]) * 256 + std::stoi(matches[6]));
     return std::make_pair(std::move(host), std::move(port));
   } else {
     // No matches. Can't find the port information.
