@@ -229,7 +229,7 @@ Client::connect(const std::string &host)
     // TODO: what if we get told to delay?
     // Receive the welcome message from the server.
     // Servers must send us this.
-    LOG("Welcome message: " << asio::receiveResponse(controlSocket_));
+    LOG(asio::receiveResponse(controlSocket_));
   }
   return connected;
 }
