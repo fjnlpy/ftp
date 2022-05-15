@@ -282,28 +282,12 @@ try {
     return false;
   }
 
-  // Set correct transfer type and request a passive connection.
-  // We use passive connections so that we don't need to set up any
-  // port forwarding to let the server open connections to us.
-  asio::sendCommand(controlSocket_, "TYPE I\r\n");
-  LOG(asio::receiveResponse(controlSocket_));
-  asio::sendCommand(controlSocket_, "PASV\r\n");
-  const std::string pasvResponse = asio::receiveResponse(controlSocket_);
-  LOG(pasvResponse);
-
-  // Determine which port to use by parsing the response, and open a data
-  // connection to that port.
-  auto parsedResponse = parsePasv(pasvResponse);
-  if (!parsedResponse) {
+  // Try and set up data connection.
+  auto maybeDataSocket = setupDataConnection();
+  if (!maybeDataSocket) {
     return false;
   }
-  LOG("Parsed response: host=" << parsedResponse->first << "; port=" << parsedResponse->second);
-  // TODO: threading considerations?
-  tcp::socket dataSocket(ioContext_);
-  if (!asio::connect(ioContext_, dataSocket, parsedResponse->first, parsedResponse->second)) {
-    return false;
-  }
-  LOG("Data socket connected.");
+  tcp::socket &dataSocket = *maybeDataSocket;
 
   // Send a store request and see if the server will accept.
   std::ostringstream storCommand;
@@ -375,4 +359,31 @@ Client::mkd(const std::string &newDir)
   return response.size() > 0 && response[0] == '2';
 }
 
+std::optional<tcp::socket>
+Client::setupDataConnection()
+{
+  // Set correct transfer type and request a passive connection.
+  // We use passive connections so that we don't need to set up any
+  // port forwarding to let the server open connections to us.
+  asio::sendCommand(controlSocket_, "TYPE I\r\n");
+  LOG(asio::receiveResponse(controlSocket_));
+  asio::sendCommand(controlSocket_, "PASV\r\n");
+  const std::string pasvResponse = asio::receiveResponse(controlSocket_);
+  LOG(pasvResponse);
+
+  // Determine which port to use by parsing the response, and open a data
+  // connection to that port.
+  auto parsedResponse = parsePasv(pasvResponse);
+  if (!parsedResponse) {
+    return {};
+  }
+  LOG("Parsed response: host=" << parsedResponse->first << "; port=" << parsedResponse->second);
+  // TODO: threading considerations?
+  tcp::socket dataSocket(ioContext_);
+  if (!asio::connect(ioContext_, dataSocket, parsedResponse->first, parsedResponse->second)) {
+    return {};
+  }
+  LOG("Data socket connected.");
+  return dataSocket;
+}
 }

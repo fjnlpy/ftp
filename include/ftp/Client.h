@@ -52,6 +52,8 @@ private:
   boost::asio::io_context ioContext_;
   boost::asio::ip::tcp::socket controlSocket_;
 
+  std::optional<boost::asio::ip::tcp::socket> setupDataConnection();
+
 };
 
 }
