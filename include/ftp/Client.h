@@ -37,10 +37,9 @@ public:
 
   bool quit();
 
-  bool stor(const std::string &filePath, const std::string &destination);
+  bool stor(const std::string &localSrc, const std::string &serverDest);
 
-  // TODO: rename these to serverDest/Src and localDest/Src for these two commands?
-  bool retr(const std::string &source, const std::string &destination);
+  bool retr(const std::string &serverSrc, const std::string &localDest);
 
   std::optional<std::string> pwd();
 

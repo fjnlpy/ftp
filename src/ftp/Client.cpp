@@ -316,10 +316,10 @@ Client::quit()
 }
 
 bool
-Client::stor(const std::string &filePath, const std::string &destination)
+Client::stor(const std::string &localSrc, const std::string &serverDest)
 { // TODO: try-catch still needed?
 try {
-  std::filesystem::path path(filePath);
+  std::filesystem::path path(localSrc);
   if (!exists(path)) {
     return false;
   }
@@ -333,7 +333,7 @@ try {
 
   // Send a store request and see if the server will accept.
   std::ostringstream storCommand;
-  storCommand << "STOR " << destination << "\r\n";
+  storCommand << "STOR " << serverDest << "\r\n";
   asio::sendCommand(controlSocket_, storCommand.str());
   const std::string storResponse = asio::receiveResponse(controlSocket_);
   LOG(storResponse);
@@ -369,11 +369,11 @@ try {
 }
 
 bool
-Client::retr(const std::string &source, const std::string &destination)
+Client::retr(const std::string &serverSrc, const std::string &localDest)
 {
 try {
   // Check that the destination is valid.
-  const std::filesystem::path destPath(destination);
+  const std::filesystem::path destPath(localDest);
   // We won't create directories leading up to the destination file, so if they don't exist then fail.
   // This method can do some funky things if the path contains '.' or '..' (specifically this may not
   // actually be the 'parent' directory -- it may be the same directory or even a child);
@@ -384,7 +384,7 @@ try {
   const std::filesystem::path parentPath = destPath.parent_path();
   const bool isValidDest = exists(parentPath) && is_directory(parentPath) && !exists(destPath);
   if (!isValidDest) {
-    LOG("Not a valid destination: " << destination);
+    LOG("Not a valid destination: " << localDest);
     return false;
   }
 
@@ -398,7 +398,7 @@ try {
   // Send RETR request and view the response.
   // This may fail if e.g. we don't permission or the file doesn't exist on the server.
   std::ostringstream retrCommand;
-  retrCommand << "RETR " << source << "\r\n";
+  retrCommand << "RETR " << serverSrc << "\r\n";
   asio::sendCommand(controlSocket_, retrCommand.str());
   const std::string retrResponse = asio::receiveResponse(controlSocket_);
   LOG(retrResponse);
@@ -407,7 +407,7 @@ try {
   }
 
   // Save the data arriving on the data socket until it is closed by the server.
-  bool isReceived = asio::retrieveFile(dataSocket, destination);
+  bool isReceived = asio::retrieveFile(dataSocket, localDest);
   // The connection should still be open here, regardless of whether or not we received an EOF.
   // Close it to make sure the server knows we've finished reading. If the server had sent an EOF
   // then it will probably think the transfer succeeded but we also need to check that there were
