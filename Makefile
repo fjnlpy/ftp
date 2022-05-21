@@ -2,7 +2,12 @@
 CXX := g++
 BOOSTINCLUDE := -I/usr/local/boost_1_77_0
 LOCALINCLUDE := -I./include
-CXXFLAGS := -std=c++17 $(BOOSTINCLUDE) $(LOCALINCLUDE)
+ifeq ($(DEBUG),1)
+	DEBUGFLAGS := -ggdb
+else
+	DEBUGFLAGS :=
+endif
+CXXFLAGS := -std=c++17 $(BOOSTINCLUDE) $(LOCALINCLUDE) $(DEBUGFLAGS)
 LDFLAGS := -pthread
 
 ## Dirs
