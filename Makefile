@@ -16,30 +16,22 @@ run: main
 
 ## Clean target
 clean:
-	rm -r build
-
-## Dir targets
-# TODO: apparently not meant to make an explicit target
-#  for directory creation.
-$(BUILDDIR):
-	mkdir -p $@
-
-BUILDFTPDIR := $(BUILDDIR)/$(FTPDIR)
-$(BUILDFTPDIR): $(BUILDDIR)
-	mkdir -p $@
+	rm -r $(BUILDDIR)
 
 ## Client.cpp targets
 CLIENTCPP := $(SRCDIR)/$(FTPDIR)/Client.cpp
 CLIENTOBJ := $(BUILDDIR)/$(FTPDIR)/Client.o
 
-$(CLIENTOBJ): $(BUILDFTPDIR) $(CLIENTCPP)
+$(CLIENTOBJ): $(CLIENTCPP)
+	mkdir -p $(BUILDDIR)/$(FTPDIR)
 	$(CXX) -c $(CXXFLAGS) $(CLIENTCPP) -o $@
 
 ## main.cpp targets
 MAINCPP := $(SRCDIR)/main.cpp
 MAINBIN := $(BUILDDIR)/main.a
 
-$(MAINBIN): $(BUILDDIR) $(MAINCPP) $(CLIENTOBJ)
+$(MAINBIN): $(MAINCPP) $(CLIENTOBJ)
+	mkdir -p $(BUILDDIR)
 	$(CXX) $(LDFLAGS) $(CXXFLAGS) $(MAINCPP) $(CLIENTOBJ) -o $@
 
 main: $(MAINBIN)
