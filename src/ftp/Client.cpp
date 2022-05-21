@@ -142,11 +142,37 @@ retrieveFile(tcp::socket &socket, const std::filesystem::path &filePath)
   assert(!exists(filePath));
 try {
 
-  // TODO: create a binary ostream and check it succeeded. It should create the file for us (check this!)
+  // Create a binary stream for saving the data. The destination file shouldn't exist but
+  // this will create it for us (and there won't be any errors as long as it's successful).
+  std::ofstream fileStream(filePath, std::ios::binary);
+  if (!fileStream) {
+    LOG("Could not create file stream: filePath=" << filePath);
+    return false;
+  }
 
-  // TODO: reading the socket and stuff... read_some into a std::array?
+  // Read and save the data arriving on the data socket.
+  constexpr size_t chunkSize = 1024;
+  std::array<char, chunkSize> buf;
+  boost::system::error_code errorCode;
+  // Read until the server closes the socket -- which indicates that the transfer has
+  // finished (successfully or otherwise).
+  while (!errorCode) { // TODO: what if adversarial server doesn't reply? Need a timeout.
+    size_t n = socket.read_some(boost::asio::buffer(buf), errorCode);
+    fileStream.write(buf.data(), n);
+  }
+
+  if (errorCode == boost::asio::error::eof) {
+    // Server closed the socket on their end. There may still be an error on the server's side
+    // but from the perspective of this method, the transfer succeeded.
+    return true;
+  } else {
+    // Something went wrong on our end, so the transfer should definitely be considered a failure.
+    LOG("Error while receiving file: error=" << boost::system::system_error(errorCode).what());
+    return false;
+  }
 
 } catch (const std::exception &e) {
+  // TODO: can there be any exceptions here?
   LOG("Error while receiving file. error=" << e.what());
   return false;
 }
@@ -380,10 +406,25 @@ try {
     return false;
   }
 
-  // TODO: retrieve file on data connection and save (asio helper)
-  bool isReceived = asio::receiveFile(dataSocket, destination);
+  // Save the data arriving on the data socket until it is closed by the server.
+  bool isReceived = asio::retrieveFile(dataSocket, destination);
+  // The connection should still be open here, regardless of whether or not we received an EOF.
+  // Close it to make sure the server knows we've finished reading. If the server had sent an EOF
+  // then it will probably think the transfer succeeded but we also need to check that there were
+  // no errors on our end. Conversely, if the server sends an EOF and everything went well on our
+  // end it doesn't necessarily mean the  transfer succeeded as something may have gone wrong
+  // on the server's end.
+  dataSocket.close();
 
-  // TODO: check post-conditions and return
+  // Receive confirmation / error info from server.
+  const std::string transferResponse = asio::receiveResponse(controlSocket_);
+  LOG(transferResponse);
+  const bool serverIsHappy = transferResponse.size() > 1 && transferResponse[0] == '2';
+
+  // Extra sanity check: the file should exist at the destination now.
+  const bool existsAtDestination = exists(destPath);
+
+  return isReceived && existsAtDestination && serverIsHappy;
 } catch (const std::filesystem::filesystem_error &e) {
   LOG("Error while retrieving file: error=" << e.what());
   return false;
