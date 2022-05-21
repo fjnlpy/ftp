@@ -9,8 +9,9 @@ LDFLAGS := -pthread
 BUILDDIR := build
 SRCDIR := src
 FTPDIR := ftp
+IODIR := io
 
-# Run target
+## Run target
 run: main
 	./$(MAINBIN)
 
@@ -18,11 +19,19 @@ run: main
 clean:
 	rm -r $(BUILDDIR)
 
+## Socket.cpp targets
+SOCKETCPP := $(SRCDIR)/$(IODIR)/Socket.cpp
+SOCKETOBJ := $(BUILDDIR)/$(IODIR)/Socket.o
+
+$(SOCKETOBJ) : $(SOCKETCPP)
+	mkdir -p $(BUILDDIR)/$(IODIR)
+	$(CXX) -c $(CXXFLAGS) $(SOCKETCPP) -o $@
+
 ## Client.cpp targets
 CLIENTCPP := $(SRCDIR)/$(FTPDIR)/Client.cpp
 CLIENTOBJ := $(BUILDDIR)/$(FTPDIR)/Client.o
 
-$(CLIENTOBJ): $(CLIENTCPP)
+$(CLIENTOBJ): $(SOCKETOBJ) $(CLIENTCPP)
 	mkdir -p $(BUILDDIR)/$(FTPDIR)
 	$(CXX) -c $(CXXFLAGS) $(CLIENTCPP) -o $@
 
