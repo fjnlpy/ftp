@@ -13,6 +13,7 @@ LDFLAGS := -pthread
 ## Dirs
 BUILDDIR := build
 SRCDIR := src
+TESTDIR := test
 FTPDIR := ftp
 IODIR := io
 
@@ -49,3 +50,15 @@ $(MAINBIN): $(MAINCPP) $(CLIENTOBJ) $(SOCKETOBJ)
 	$(CXX) $(LDFLAGS) $(CXXFLAGS) $^ -o $@
 
 main: $(MAINBIN)
+
+## Client functional test targets
+CLIENTFUNCTIONALTESTCPP := $(TESTDIR)/$(FTPDIR)/ClientFunctionalTests.cpp
+CLIENTFUNCTIONALTESTBIN := $(BUILDDIR)/$(FTPDIR)/ClientFunctionalTests.a
+
+$(CLIENTFUNCTIONALTESTBIN): $(CLIENTFUNCTIONALTESTCPP) $(CLIENTOBJ) $(SOCKETOBJ)
+	mkdir -p $(BUILDDIR)/$(FTPDIR)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@
+
+## All test targets
+test: $(CLIENTFUNCTIONALTESTBIN)
+	./$(CLIENTFUNCTIONALTESTBIN)
