@@ -10,6 +10,7 @@
 #define TEST_ASSERT(e) throwIfFalse(e, __LINE__)
 
 using std::filesystem::path;
+using std::filesystem::directory_iterator;
 using ftp::Client;
 using TestFunction = void(*)(Client&, const path&);
 
@@ -19,7 +20,7 @@ constexpr auto HOST = "127.0.0.1", USERNAME = "anonymous", PASSWORD = "anonymous
 
 template <class T>
 void
-constexpr throwIfFalse(const T &expression, int line)
+throwIfFalse(const T &expression, int line)
 {
   if (!expression) {
     std::stringstream msg;
@@ -31,10 +32,10 @@ constexpr throwIfFalse(const T &expression, int line)
 void
 remove_all_inside(const path &dir)
 {
-  // assert(is_directory(dir)); // TODO: THIS DOES NOT WORK NOT WORK
-  // for (const auto& entry : dir) { 
-  //   std::filesystem::remove_all(entry);
-  // }
+  assert(is_directory(dir));
+  for (const auto& entry : directory_iterator(dir)) {
+    std::filesystem::remove_all(entry);
+  }
 }
 
 
@@ -82,9 +83,14 @@ main(void)
   auto testsExecuted = 0;
   auto testsPassed = 0;
 
-  path tempDir("./scratch/temp");
-  if (!exists(tempDir) || !is_empty(tempDir) || !is_directory(tempDir)) {
-    LOG("Not proceeding with tests because tempDir either doesn't exist or is not an empty directory.");
+  path localTemp("./scratch/temp");
+  if (!exists(localTemp) || !is_empty(localTemp) || !is_directory(localTemp)) {
+    LOG("Not proceeding with tests because local temp dir either doesn't exist or is not an empty directory.");
+    return -1;
+  }
+  path serverTemp("./vsftpd/anon/temp");
+  if (!exists(serverTemp) || !is_empty(serverTemp) || !is_directory(serverTemp)) {
+    LOG("Not proceeding with tests because server temp dir either doesn't exist or is not an empty directory.");
     return -1;
   }
 
@@ -95,11 +101,12 @@ main(void)
     LOG("---");
     Client client;
     
-    remove_all_inside(tempDir);
+    remove_all_inside(localTemp);
+    remove_all_inside(serverTemp);
 
     try {
       ++testsExecuted;
-      testFunc(client, tempDir);
+      testFunc(client, localTemp);
       // If no exception thrown, test passes.
       ++testsPassed;
       LOG("PASSED");
@@ -110,7 +117,8 @@ main(void)
     LOG("===");
   }
 
-  remove_all_inside(tempDir);
+  remove_all_inside(localTemp);
+  remove_all_inside(serverTemp);
 
   std::stringstream summary;
   summary << "Tests passed: " << testsPassed << "/" << testsExecuted << std::endl;
