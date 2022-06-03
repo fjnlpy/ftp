@@ -81,4 +81,40 @@ pasvFsm(io::Socket &controlSocket)
   }
 }
 
+std::optional<std::string>
+directoryFsm(io::Socket &controlSocket, const std::optional<std::string> &path)
+{
+  const std::string command = (path ? (std::string("MKD ") + *path) : std::string("PWD")) + DELIM;
+  const auto response = sendCommandAndReceiveReply(controlSocket, command);
+  if (!response) {
+    return {};
+  }
+
+  if (response->substr(0, 3) != "257") {
+    // Response indicates failure.
+    return {};
+  }
+
+  // The response should be of the form `257<sp>"<dir>"[<other stuff>]\r\n`
+  // Use regex to extract the part between the quotes.
+  // TODO: how to handle "quote doubling" convention, or other possible conventions for nested
+  //   qoutations (e.g. escape characters) without accidentally grabbing too much?
+
+  // Note we match the longest substring which is inside quotes. That should handle any nested
+  // quoting but may cause problems if there are quotes elsewhere in the message.
+  const std::regex regex(
+    R"(257 \"(.*)\".*)"
+  );
+
+  std::smatch matches;
+  if (std::regex_search(*response, matches, regex) && matches.size() == 2) {
+    return matches[1].str();
+  } else {
+    // No matches so can't return the path to the directory. Note that we are returning
+    // a null optional here but we did successfully create the directory. In other words,
+    // a null response doesn't imply that the operation failed.
+    return {};
+  }
+}
+
 }

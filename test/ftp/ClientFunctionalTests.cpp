@@ -107,7 +107,9 @@ auto tests = std::unordered_map<std::string, TestFunction> {
     TEST_ASSERT(!client.cwd("temp/newdir"));
 
     // Now create newdir.
-    TEST_ASSERT(client.mkd("temp/newdir"));
+    const auto response = client.mkd("temp/newdir");
+    // Server should tell us its path to the directory.
+    TEST_ASSERT(response && *response == "/temp/newdir");
 
     // This should now succeed.
     TEST_ASSERT(client.cwd("temp/newdir"));

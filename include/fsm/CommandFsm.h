@@ -17,6 +17,9 @@ oneStepFsm(
 std::optional<std::pair<std::string, std::string>>
 pasvFsm(io::Socket &controlSocket);
 
+std::optional<std::string>
+directoryFsm(io::Socket &controlSocket, const std::optional<std::string> &path);
+
 }
 
 #endif

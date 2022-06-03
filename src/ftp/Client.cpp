@@ -11,38 +11,6 @@
 #include "util/util.hpp"
 #include "fsm/CommandFsm.h"
 
-namespace
-{
-
-std::optional<std::string>
-parsePwdResponse(const std::string &response)
-{
-  if (response.substr(0, 3) != "257") {
-    // Response indicates failure.
-    return {};
-  }
-
-  // The response should be of the form `257<sp>"<dir>"[<other stuff>]\r\n`
-  // Use regex to extract the part between the quotes.
-  // TODO: how to handle "quote doubling" convention, or other possible conventions for nested
-  //   qoutations (e.g. escape characters) without accidentally grabbing too much?
-
-  // Note we match the longest substring which is inside quotes. That should handle any nested
-  // quoting but may cause problems if there are quotes elsewhere in the message.
-  const std::regex regex(
-    R"(257 \"(.*)\".*)"
-  );
-
-  std::smatch matches;
-  if (std::regex_search(response, matches, regex) && matches.size() == 2) {
-    return matches[1].str();
-  } else {
-    return {};
-  }
-}
-
-}
-
 namespace ftp
 {
 
@@ -223,13 +191,7 @@ try {
 std::optional<std::string>
 Client::pwd()
 {
-  controlSocket_.sendString("PWD\r\n");
-  const auto response = controlSocket_.readUntil("\r\n");
-  if (response) {
-    return parsePwdResponse(*response);
-  } else {
-    return {};
-  }
+  return fsm::directoryFsm(controlSocket_, {});
 }
 
 bool
@@ -238,16 +200,11 @@ Client::cwd(const std::string &newDir)
   return fsm::oneStepFsm(controlSocket_, std::string("CWD ") + newDir);
 }
 
-bool
+std::optional<std::string>
 Client::mkd(const std::string &newDir)
 {
-  // TODO: this should forward the response
-  // TODO: fails if it already exists? problem?
-  std::ostringstream mkdCommand;
-  mkdCommand << "MKD " << newDir << "\r\n";
-  controlSocket_.sendString(mkdCommand.str());
-  const auto response = controlSocket_.readUntil("\r\n");
-  return response && response->size() > 0 && (*response)[0] == '2';
+  // TODO: fails if it already exists -- expected?
+  return fsm::directoryFsm(controlSocket_, newDir);
 }
 
 std::optional<io::Socket>
