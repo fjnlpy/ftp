@@ -16,6 +16,7 @@ SRCDIR := src
 TESTDIR := test
 FTPDIR := ftp
 IODIR := io
+FSMDIR := fsm
 
 ## Run target
 run: main
@@ -24,6 +25,14 @@ run: main
 ## Clean target
 clean:
 	rm -r $(BUILDDIR)
+
+## CommandFsm.cpp targets
+COMMANDFSMCPP := $(SRCDIR)/$(FSMDIR)/CommandFsm.cpp
+COMMANDFSMOBJ := $(BUILDDIR)/$(FSMDIR)/CommandFsm.obj
+
+$(COMMANDFSMOBJ) : $(COMMANDFSMCPP)
+	mkdir -p $(BUILDDIR)/$(FSMDIR)
+	$(CXX) -c $(CXXFLAGS) $(COMMANDFSMCPP) -o $@
 
 ## Socket.cpp targets
 SOCKETCPP := $(SRCDIR)/$(IODIR)/Socket.cpp
@@ -45,7 +54,7 @@ $(CLIENTOBJ): $(CLIENTCPP)
 MAINCPP := $(SRCDIR)/main.cpp
 MAINBIN := $(BUILDDIR)/main.a
 
-$(MAINBIN): $(MAINCPP) $(CLIENTOBJ) $(SOCKETOBJ)
+$(MAINBIN): $(MAINCPP) $(CLIENTOBJ) $(SOCKETOBJ) $(COMMANDFSMOBJ)
 	mkdir -p $(BUILDDIR)
 	$(CXX) $(LDFLAGS) $(CXXFLAGS) $^ -o $@
 
@@ -55,7 +64,7 @@ main: $(MAINBIN)
 CLIENTFUNCTIONALTESTCPP := $(TESTDIR)/$(FTPDIR)/ClientFunctionalTests.cpp
 CLIENTFUNCTIONALTESTBIN := $(BUILDDIR)/$(FTPDIR)/ClientFunctionalTests.a
 
-$(CLIENTFUNCTIONALTESTBIN): $(CLIENTFUNCTIONALTESTCPP) $(CLIENTOBJ) $(SOCKETOBJ)
+$(CLIENTFUNCTIONALTESTBIN): $(CLIENTFUNCTIONALTESTCPP) $(CLIENTOBJ) $(SOCKETOBJ) $(COMMANDFSMOBJ)
 	mkdir -p $(BUILDDIR)/$(FTPDIR)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@
 
