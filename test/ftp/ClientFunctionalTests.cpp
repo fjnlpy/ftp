@@ -73,6 +73,19 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   }
   },
 
+  { "Test upload big file",
+  [](Client &client, const path &, const path &serverTemp) {
+    TEST_ASSERT(client.connect(HOST));
+    TEST_ASSERT(client.login(USERNAME, PASSWORD));
+
+    TEST_ASSERT(client.stor("scratch/files/bigfile.txt", "temp/uploadedfile.txt"));
+
+    const auto uploadedFile(serverTemp/"uploadedfile.txt");
+    // bigfile contains 2049 bytes; uploadedFile should be the same size.
+    TEST_ASSERT(file_size(uploadedFile) == 2049);
+  }
+  }
+
 };
 }
 
