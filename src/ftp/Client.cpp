@@ -14,39 +14,6 @@
 namespace
 {
 
-std::optional<std::pair<std::string, std::string>>
-parsePasv(const std::string &pasvResponse)
-{
-  if (pasvResponse.substr(0, 3) != "227") {
-    // The PASV request failed (or is malformed) so we can't
-    // extract the port information.
-    return {};
-  }
-
-  // Regex for finding the port information. Usually it's also wrapped in perenthesis
-  // but according to RFC1123 section 4.1.2.6 we can't rely on that (or even that
-  // it's comma-separated, but we will assume so here).
-  const std::regex portRegex(
-    R"((\d+),(\d+),(\d+),(\d+),(\d+),(\d+))"
-  );
-
-  // Look for a match where all the sub-groups also matched.
-  std::smatch matches;
-  if (std::regex_search(pasvResponse, matches, portRegex) && matches.size() == 7
-        && matches[1].matched && matches[2].matched && matches[3].matched
-        && matches[4].matched && matches[5].matched && matches[6].matched
-  ) {
-    std::string host(matches[1].str() + "." + matches[2].str() + "." + matches[3].str() + "." + matches[4].str());
-    // 5th and 6th parts are the upper and lower eight bits of the port number.
-    // Convert them to ints, combine them into one value, then convert back to a string.
-    std::string port = std::to_string(std::stoi(matches[5]) * 256 + std::stoi(matches[6]));
-    return std::make_pair(std::move(host), std::move(port));
-  } else {
-    // No matches. Can't find the port information.
-    return {};
-  }
-}
-
 std::optional<std::string>
 parsePwdResponse(const std::string &response)
 {
@@ -290,28 +257,28 @@ Client::mkd(const std::string &newDir)
 std::optional<io::Socket>
 Client::setupDataConnection()
 {
-  // Set correct transfer type and request a passive connection.
-  // We use passive connections so that we don't need to set up any
-  // port forwarding to let the server open connections to us.
+  // Set correct transfer type.
+  // Only the unstructured "image" type is supported.
+  // Users can still have structure in their data but they have
+  // to manage it themselves.
   if (!fsm::oneStepFsm(controlSocket_, "TYPE I")) {
     return {};
   }
-  controlSocket_.sendString("PASV\r\n");
-  const auto pasvResponse = controlSocket_.readUntil("\r\n");
-  if (!pasvResponse) {
-    return {};
-  }
 
-  // Determine which port to use by parsing the response, and open a data
-  // connection to that port.
-  auto parsedResponse = parsePasv(*pasvResponse);
-  if (!parsedResponse) {
+  // Request a passive connection.
+  // We use passive connections so that we can initiate the data connection. Otherwise, the server
+  // will try to contact us at a port it specifies but that is unlikely to work because most
+  // clients won't have that port exposed to the internet.
+  const auto maybeConnectionInfo = fsm::pasvFsm(controlSocket_);
+  if (!maybeConnectionInfo) {
+    // The server didn't give us valid connection information, or some other problem occurred.
     return {};
   }
-  LOG("Parsed response: host=" << parsedResponse->first << "; port=" << parsedResponse->second);
+  const auto &[host, port] = *maybeConnectionInfo;
+  LOG("Parsed response: host=" << host << "; port=" << port);
   // TODO: threading considerations?
   io::Socket dataSocket;
-  if (!dataSocket.connect(parsedResponse->first, parsedResponse->second)) {
+  if (!dataSocket.connect(host, port)) {
     return {};
   }
   LOG("Data socket connected.");
