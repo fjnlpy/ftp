@@ -96,6 +96,26 @@ auto tests = std::unordered_map<std::string, TestFunction> {
 
     TEST_ASSERT(exists(downloadedFile) && file_size(downloadedFile) == 2050);
   }
+  },
+
+  { "Test make directory",
+  [](Client &client, const path &, const path &serverTemp) {
+    TEST_ASSERT(client.connect(HOST));
+    TEST_ASSERT(client.login(USERNAME, PASSWORD));
+
+    // This should fail because newdir doesn't exist.
+    TEST_ASSERT(!client.cwd("temp/newdir"));
+
+    // Now create newdir.
+    TEST_ASSERT(client.mkd("temp/newdir"));
+
+    // This should now succeed.
+    TEST_ASSERT(client.cwd("temp/newdir"));
+
+    // And newdir should exist on the server.
+    const auto newDir(serverTemp/"newdir");
+    TEST_ASSERT(exists(newDir) && is_directory(newDir));
+  }
   }
 
 };
