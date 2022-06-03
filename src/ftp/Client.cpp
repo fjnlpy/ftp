@@ -10,187 +10,8 @@
 
 #include "util/util.hpp"
 
-#define DEBUG
-
-using boost::asio::ip::tcp;
-
 namespace
 {
-namespace asio
-{
-bool
-connect(
-  boost::asio::io_context &ioContext,
-  tcp::socket &socket,
-  const std::string &host,
-  const std::string &port
-) {
-try {
-  auto endpoints = tcp::resolver(ioContext).resolve(host, port);
-  boost::asio::connect(socket, std::move(endpoints));
-  return true;
-} catch (const std::exception &e) {
-  LOG(
-    "Could not make connection. host=" << host
-    << "; port=" << port
-    << "; error=" << e.what()
-  );
-  return false;
-}
-}
-
-std::string
-receiveResponse(tcp::socket &socket)
-{
-try {
-  std::string output;
-  // TODO: what if we never receive a reply, or it's malformed? Probably use std::optional.
-  //  Note: may be malformed in that there may be characters after the
-  //  delimiter, but we're not expecting that as there should only be at
-  //  most one pending response from the server on the control socket.
-  const size_t n = boost::asio::read_until(socket, boost::asio::dynamic_buffer(output), "\r\n");
-  output.erase(output.begin() + n, output.end());
-  if (output.size() >= 2) {
-    // Remove the \r\n because it's not part of the response.
-    output.erase(output.end() - 2, output.end());
-  }
-  return output;
-} catch (const std::exception &e) {
-  // TODO:
-  exit(1);
-}
-}
-
-size_t
-sendCommand(tcp::socket &socket, const std::string &command)
-{
-try {
-  return boost::asio::write(socket, boost::asio::buffer(command, command.size()));
-} catch (const std::exception &e) {
-  return 0;
-}
-}
-
-bool
-sendFile(tcp::socket &socket, const std::filesystem::path &filePath)
-{
-  assert(exists(filePath) && (is_regular_file(filePath) || is_character_file(filePath)));
-try
-{
-  std::ifstream fileStream(filePath, std::ios::binary);
-  if (!fileStream) {
-    LOG("Could not open filestream; path=" << filePath);
-    return false;
-  }
-
-  // Reset gcount before the loop starts.
-  fileStream.peek();
-
-  constexpr size_t chunkSize = 1024;
-  std::array<char, chunkSize> buf;
-
-  // Send 1KB chunks until the stream fails.
-  LOG("Sending file: chunkSize=" << chunkSize);
-  while (fileStream.read(buf.data(), chunkSize)) {
-    #ifdef DEBUG
-    LOG("===NEW CHUNK===");
-    for (size_t i = 0; i < chunkSize; ++i) {
-      std::cerr << buf[i];
-    }
-    std::cerr << std::endl;
-    LOG("===END CHUNK===");
-    #endif
-    // Assume if anything goes wrong an exception will be thrown i.e. no need
-    // to check return value.
-    boost::asio::write(socket, boost::asio::buffer(buf, fileStream.gcount()));
-  }
-
-  if (!fileStream.eof()) {
-    // The stream didn't fail because of reaching the end of the file, so
-    // something went wrong.
-    // TODO: how do we tell the server that file is useless / not complete?
-    LOG("File stream did not complete correctly. Stopping.");
-    return false;
-  } else {
-    LOG("Reached EOF.");
-    // We reached eof. Send any data that was read in the final read operation.
-    if (fileStream.gcount()) {
-      LOG("Sending extra data: gcount=" << fileStream.gcount());
-
-      #ifdef DEBUG // TODO: avoid repeating this debug printing code; maybe define an ostream for array<char,size>?
-      LOG("===NEW CHUNK===");
-      for (size_t i = 0; i < fileStream.gcount(); ++i) {
-        std::cerr << buf[i];
-      }
-      std::cerr << std::endl;
-      LOG("===END CHUNK===");
-      #endif
-
-      boost::asio::write(socket, boost::asio::buffer(buf, fileStream.gcount()));
-    }
-    return true;
-  }
-} catch (const std::exception &e) {
-  LOG("Error while sending file. error=" << e.what());
-  return false;
-}
-}
-
-bool
-retrieveFile(tcp::socket &socket, const std::filesystem::path &filePath)
-{
-  assert(!exists(filePath));
-try {
-
-  // Create a binary stream for saving the data. The destination file shouldn't exist but
-  // this will create it for us (and there won't be any errors as long as it's successful).
-  std::ofstream fileStream(filePath, std::ios::binary);
-  if (!fileStream) {
-    LOG("Could not create file stream: filePath=" << filePath);
-    return false;
-  }
-
-  // Read and save the data arriving on the data socket.
-  constexpr size_t chunkSize = 1024;
-  std::array<char, chunkSize> buf;
-  boost::system::error_code errorCode;
-  // Read until the server closes the socket -- which indicates that the transfer has
-  // finished (successfully or otherwise).
-  while (!errorCode) { // TODO: what if adversarial server doesn't reply? Need a timeout.
-    size_t n = socket.read_some(boost::asio::buffer(buf), errorCode);
-    fileStream.write(buf.data(), n);
-  }
-
-  if (errorCode == boost::asio::error::eof) {
-    // Server closed the socket on their end. There may still be an error on the server's side
-    // but from the perspective of this method, the transfer succeeded.
-    return true;
-  } else {
-    // Something went wrong on our end, so the transfer should definitely be considered a failure.
-    LOG("Error while receiving file: error=" << boost::system::system_error(errorCode).what());
-    return false;
-  }
-
-} catch (const std::exception &e) {
-  // TODO: can there be any exceptions here?
-  LOG("Error while receiving file. error=" << e.what());
-  return false;
-}
-}
-
-bool
-closeSocket(tcp::socket &socket)
-{
-try {
-  socket.shutdown(socket.shutdown_both);
-  socket.close();
-  return true;
-} catch(const std::exception &e) {
-  return false;
-}
-}
-
-}
 
 std::optional<std::pair<std::string, std::string>>
 parsePasv(const std::string &pasvResponse)
@@ -257,23 +78,16 @@ parsePwdResponse(const std::string &response)
 namespace ftp
 {
 
-ftp::Client::Client(): 
-  ioContext_(),
-  controlSocket_(ioContext_) 
+ftp::Client::Client() : controlSocket_()
 { }
 
 bool
 Client::connect(const std::string &host)
 {
   // TODO: what if we're already connected? maybe fail?
-  bool connected = asio::connect(ioContext_, controlSocket_, host, "ftp");
-  if (connected) {
-    // TODO: what if we get told to delay?
-    // Receive the welcome message from the server.
-    // Servers must send us this.
-    LOG(asio::receiveResponse(controlSocket_));
-  }
-  return connected;
+  bool connected = controlSocket_.connect(host, "ftp");
+  // TODO: what if we get told to delay?
+  return connected && controlSocket_.readUntil("\r\n").has_value();
 }
 
 bool
@@ -281,36 +95,35 @@ Client::login(
   const std::string &username,
   const std::string &password
 ) {
+  // TODO: Check for failures.
+
   std::ostringstream usernameCommand;
   usernameCommand << "USER " << username << "\r\n";
-  asio::sendCommand(controlSocket_, usernameCommand.str());
-  LOG(asio::receiveResponse(controlSocket_));
+  controlSocket_.sendString(usernameCommand.str());
+  controlSocket_.readUntil("\r\n");
 
   std::ostringstream passwordCommand;
   passwordCommand << "PASS " << password << "\r\n";
-  asio::sendCommand(controlSocket_, passwordCommand.str());
-  LOG(asio::receiveResponse(controlSocket_));
-  // TODO: Check for failure.
-  return true;
+  controlSocket_.sendString(passwordCommand.str());
+  return controlSocket_.readUntil("\r\n").has_value();
 }
 
 bool
 Client::noop()
 {
-  bool succeeded = asio::sendCommand(controlSocket_, "NOOP\r\n") > 0;
-  if (succeeded) {
-    LOG(asio::receiveResponse(controlSocket_));
-  }
-  return succeeded;
+  // TODO: check for failures
+
+  controlSocket_.sendString("NOOP\r\n");
+  return controlSocket_.readUntil("\r\n").has_value();
 }
 
 bool
 Client::quit()
 {
   // TODO: what if the socket isn't connected to anything?
-  asio::sendCommand(controlSocket_, "QUIT\r\n");
-  LOG(asio::receiveResponse(controlSocket_));
-  asio::closeSocket(controlSocket_);
+  controlSocket_.sendString("QUIT\r\n");
+  controlSocket_.readUntil("\r\n");
+  controlSocket_.close();
   // TODO: handle errors.
   return true;
 }
@@ -329,23 +142,20 @@ try {
   if (!maybeDataSocket) {
     return false;
   }
-  tcp::socket &dataSocket = *maybeDataSocket;
+  io::Socket &dataSocket = *maybeDataSocket;
 
   // Send a store request and see if the server will accept.
   std::ostringstream storCommand;
   storCommand << "STOR " << serverDest << "\r\n";
-  asio::sendCommand(controlSocket_, storCommand.str());
-  const std::string storResponse = asio::receiveResponse(controlSocket_);
-  LOG(storResponse);
+  controlSocket_.sendString(storCommand.str());
+  const auto storResponse = controlSocket_.readUntil("\r\n");
   // a 1xx reply means we can proceed. Anything else means the server won't accept our file.
-  if (storResponse.size() == 0 || storResponse[0] != '1') {
+  if (!storResponse || storResponse->size() == 0 || (*storResponse)[0] != '1') {
     return false;
   }
 
   // Try and send the file over the data connection.
-  // Note we don't check the return type because we will use the server's response to
-  // decide if the upload succeeded.
-  bool isSent = asio::sendFile(dataSocket, path);
+  bool isSent = dataSocket.sendFile(path);
   LOG("File sent across data socket: isSent=" << (isSent ? "true" : "false"));
 
   // Close data coonection if not closed, and read the server's response.
@@ -353,16 +163,18 @@ try {
   // open. Otherwise, the server won't say anything on the control connection.
   // Note if we do that the server may consider the upload to have succeeded and send a positive
   // response (e.g. if we partially sent the file).
-  if (dataSocket.is_open()) {
+  if (dataSocket.isOpen()) {
     LOG("Data connection still open. Closing.");
-    asio::closeSocket(dataSocket);
+    dataSocket.close();
   }
-  const std::string fileSendResponse = asio::receiveResponse(controlSocket_);
-  // TODO: what i something goes wrong on our end after we've sent some bytes, and the server thinks
+  const auto fileSendResponse = controlSocket_.readUntil("\r\n");
+  // TODO: what if something goes wrong on our end after we've sent some bytes, and the server thinks
   // we've sent the whole file and so sends a positive response? Do we then tell it to delete the
   // file?
-  LOG(fileSendResponse);
-  return isSent && fileSendResponse.size() > 0 && fileSendResponse[0] == '2';
+  return isSent
+    && fileSendResponse
+    && fileSendResponse->size() > 0
+    && (*fileSendResponse)[0] == '2';
 } catch (const std::filesystem::filesystem_error &e) {
   return false;
 }
@@ -393,21 +205,20 @@ try {
   if (!maybeDataSocket) {
     return false;
   }
-  tcp::socket &dataSocket = *maybeDataSocket;
+  io::Socket &dataSocket = *maybeDataSocket;
 
   // Send RETR request and view the response.
   // This may fail if e.g. we don't permission or the file doesn't exist on the server.
   std::ostringstream retrCommand;
   retrCommand << "RETR " << serverSrc << "\r\n";
-  asio::sendCommand(controlSocket_, retrCommand.str());
-  const std::string retrResponse = asio::receiveResponse(controlSocket_);
-  LOG(retrResponse);
-  if (retrResponse.size() == 0 || retrResponse[0] != '1') {
+  controlSocket_.sendString(retrCommand.str());
+  const auto retrResponse = controlSocket_.readUntil("\r\n");
+  if (!retrResponse || retrResponse->size() == 0 || (*retrResponse)[0] != '1') {
     return false;
   }
 
   // Save the data arriving on the data socket until it is closed by the server.
-  bool isReceived = asio::retrieveFile(dataSocket, localDest);
+  bool isReceived = dataSocket.retrieveFile(localDest);
   // The connection should still be open here, regardless of whether or not we received an EOF.
   // Close it to make sure the server knows we've finished reading. If the server had sent an EOF
   // then it will probably think the transfer succeeded but we also need to check that there were
@@ -417,14 +228,14 @@ try {
   dataSocket.close();
 
   // Receive confirmation / error info from server.
-  const std::string transferResponse = asio::receiveResponse(controlSocket_);
-  LOG(transferResponse);
-  const bool serverIsHappy = transferResponse.size() > 1 && transferResponse[0] == '2';
+  const auto transferResponse = controlSocket_.readUntil("\r\n");
+  const bool isServerHappy =
+    transferResponse && transferResponse->size() > 0 && (*transferResponse)[0] == '2';
 
   // Extra sanity check: the file should exist at the destination now.
-  const bool existsAtDestination = exists(destPath);
+  const bool isFileAtDestination = exists(destPath);
 
-  return isReceived && existsAtDestination && serverIsHappy;
+  return isReceived && isFileAtDestination && isServerHappy;
 } catch (const std::filesystem::filesystem_error &e) {
   LOG("Error while retrieving file: error=" << e.what());
   return false;
@@ -434,10 +245,13 @@ try {
 std::optional<std::string>
 Client::pwd()
 {
-  asio::sendCommand(controlSocket_, "PWD\r\n");
-  const std::string response = asio::receiveResponse(controlSocket_);
-  LOG(response);
-  return parsePwdResponse(response);
+  controlSocket_.sendString("PWD\r\n");
+  const auto response = controlSocket_.readUntil("\r\n");
+  if (response) {
+    return parsePwdResponse(*response);
+  } else {
+    return {};
+  }
 }
 
 bool
@@ -445,10 +259,9 @@ Client::cwd(const std::string &newDir)
 {
   std::ostringstream cwdCommand;
   cwdCommand << "CWD " << newDir << "\r\n";
-  asio::sendCommand(controlSocket_, cwdCommand.str());
-  const std::string response = asio::receiveResponse(controlSocket_);
-  LOG(response);
-  return response.size() > 0 && response[0] == '2';
+  controlSocket_.sendString(cwdCommand.str());
+  const auto response = controlSocket_.readUntil("\r\n");
+  return response && response->size() > 0 && (*response)[0] == '2';
 }
 
 bool
@@ -458,34 +271,35 @@ Client::mkd(const std::string &newDir)
   // TODO: fails if it already exists? problem?
   std::ostringstream mkdCommand;
   mkdCommand << "MKD " << newDir << "\r\n";
-  asio::sendCommand(controlSocket_, mkdCommand.str());
-  const std::string response = asio::receiveResponse(controlSocket_);
-  LOG(response);
-  return response.size() > 0 && response[0] == '2';
+  controlSocket_.sendString(mkdCommand.str());
+  const auto response = controlSocket_.readUntil("\r\n");
+  return response && response->size() > 0 && (*response)[0] == '2';
 }
 
-std::optional<tcp::socket>
+std::optional<io::Socket>
 Client::setupDataConnection()
 {
   // Set correct transfer type and request a passive connection.
   // We use passive connections so that we don't need to set up any
   // port forwarding to let the server open connections to us.
-  asio::sendCommand(controlSocket_, "TYPE I\r\n");
-  LOG(asio::receiveResponse(controlSocket_));
-  asio::sendCommand(controlSocket_, "PASV\r\n");
-  const std::string pasvResponse = asio::receiveResponse(controlSocket_);
-  LOG(pasvResponse);
+  controlSocket_.sendString("TYPE I\r\n");
+  controlSocket_.readUntil("\r\n");
+  controlSocket_.sendString("PASV\r\n");
+  const auto pasvResponse = controlSocket_.readUntil("\r\n");
+  if (!pasvResponse) {
+    return {};
+  }
 
   // Determine which port to use by parsing the response, and open a data
   // connection to that port.
-  auto parsedResponse = parsePasv(pasvResponse);
+  auto parsedResponse = parsePasv(*pasvResponse);
   if (!parsedResponse) {
     return {};
   }
   LOG("Parsed response: host=" << parsedResponse->first << "; port=" << parsedResponse->second);
   // TODO: threading considerations?
-  tcp::socket dataSocket(ioContext_);
-  if (!asio::connect(ioContext_, dataSocket, parsedResponse->first, parsedResponse->second)) {
+  io::Socket dataSocket;
+  if (!dataSocket.connect(parsedResponse->first, parsedResponse->second)) {
     return {};
   }
   LOG("Data socket connected.");

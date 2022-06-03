@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include <boost/asio.hpp>
+#include "io/Socket.h"
 
 namespace ftp
 {
@@ -51,10 +51,9 @@ public:
 
 private:
 
-  boost::asio::io_context ioContext_;
-  boost::asio::ip::tcp::socket controlSocket_;
+  io::Socket controlSocket_;
 
-  std::optional<boost::asio::ip::tcp::socket> setupDataConnection();
+  std::optional<io::Socket> setupDataConnection();
 
 };
 
