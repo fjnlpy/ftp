@@ -82,7 +82,19 @@ auto tests = std::unordered_map<std::string, TestFunction> {
 
     const auto uploadedFile(serverTemp/"uploadedfile.txt");
     // bigfile contains 2049 bytes; uploadedFile should be the same size.
-    TEST_ASSERT(file_size(uploadedFile) == 2049);
+    TEST_ASSERT(exists(uploadedFile) && file_size(uploadedFile) == 2049);
+  }
+  },
+
+  { "Test download big file",
+  [](Client &client, const path &localTemp, const path &) {
+    TEST_ASSERT(client.connect(HOST));
+    TEST_ASSERT(client.login(USERNAME, PASSWORD));
+
+    const auto downloadedFile(localTemp/"downloadedfile.txt");
+    TEST_ASSERT(client.retr("files/bigfile.txt", downloadedFile));
+
+    TEST_ASSERT(exists(downloadedFile) && file_size(downloadedFile) == 2050);
   }
   }
 
