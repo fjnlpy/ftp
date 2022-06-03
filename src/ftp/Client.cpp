@@ -85,9 +85,13 @@ ftp::Client::Client() : controlSocket_()
 bool
 Client::connect(const std::string &host)
 {
-  // TODO: what if we're already connected? maybe fail?
+  if (controlSocket_.isOpen()) {
+    // Already connected to something, so fail.
+    return false;
+  }
   bool connected = controlSocket_.connect(host, "ftp");
   // TODO: what if we get told to delay?
+  // Receive welcome message from the server (it must send this).
   return connected && controlSocket_.readUntil("\r\n").has_value();
 }
 
