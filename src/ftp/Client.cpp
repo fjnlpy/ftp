@@ -9,6 +9,7 @@
 #include <string>
 
 #include "util/util.hpp"
+#include "fsm/CommandFsm.h"
 
 namespace
 {
@@ -111,21 +112,27 @@ Client::login(
 bool
 Client::noop()
 {
-  // TODO: check for failures
-
-  controlSocket_.sendString("NOOP\r\n");
-  return controlSocket_.readUntil("\r\n").has_value();
+  return fsm::oneStepFsm(controlSocket_, "NOOP");
 }
 
 bool
 Client::quit()
 {
-  // TODO: what if the socket isn't connected to anything?
-  controlSocket_.sendString("QUIT\r\n");
-  controlSocket_.readUntil("\r\n");
-  controlSocket_.close();
-  // TODO: handle errors.
-  return true;
+  if (!controlSocket_.isOpen()) {
+    // Not connected to anything.
+    return false;
+  }
+
+  bool hasQuit = fsm::oneStepFsm(controlSocket_, "QUIT");
+  if (!hasQuit) {
+    // This could mean the message failed to send, or it
+    // could be a 500 response from the server (very unlikely,
+    // because that should only happen for syntax errors).
+    // In either case, just log it and we will shut down
+    // the socket anyway (essentially forcing a quit).
+    LOG("Error while trying to quit.");
+  }
+  return controlSocket_.close();
 }
 
 bool
@@ -282,8 +289,9 @@ Client::setupDataConnection()
   // Set correct transfer type and request a passive connection.
   // We use passive connections so that we don't need to set up any
   // port forwarding to let the server open connections to us.
-  controlSocket_.sendString("TYPE I\r\n");
-  controlSocket_.readUntil("\r\n");
+  if (!fsm::oneStepFsm(controlSocket_, "TYPE I")) {
+    return {};
+  }
   controlSocket_.sendString("PASV\r\n");
   const auto pasvResponse = controlSocket_.readUntil("\r\n");
   if (!pasvResponse) {
