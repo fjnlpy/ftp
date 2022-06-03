@@ -235,11 +235,7 @@ Client::pwd()
 bool
 Client::cwd(const std::string &newDir)
 {
-  std::ostringstream cwdCommand;
-  cwdCommand << "CWD " << newDir << "\r\n";
-  controlSocket_.sendString(cwdCommand.str());
-  const auto response = controlSocket_.readUntil("\r\n");
-  return response && response->size() > 0 && (*response)[0] == '2';
+  return fsm::oneStepFsm(controlSocket_, std::string("CWD ") + newDir);
 }
 
 bool
