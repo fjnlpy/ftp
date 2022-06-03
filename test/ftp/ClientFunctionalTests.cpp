@@ -12,7 +12,7 @@
 using std::filesystem::path;
 using std::filesystem::directory_iterator;
 using ftp::Client;
-using TestFunction = void(*)(Client&, const path&);
+using TestFunction = void(*)(Client&, const path&, const path&);
 
 namespace {
 
@@ -41,13 +41,13 @@ remove_all_inside(const path &dir)
 
 auto tests = std::unordered_map<std::string, TestFunction> {
   { "Test unknown host",
-  [](Client &client, const path &temp) {
+  [](Client &client, const path &, const path &) {
     TEST_ASSERT(!client.connect(USERNAME));
   }
   },
 
   { "Test successful connection",
-  [](Client &client, const path &temp) {
+  [](Client &client, const path &, const path &) {
     TEST_ASSERT(client.connect(HOST));
   }
   },
@@ -56,7 +56,7 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   // TODO: test mkd -- how to delete the new directory afterwards?
 
   { "Test change and print directory",
-  [](Client &client, const path &temp) {
+  [](Client &client, const path &, const path &) {
     TEST_ASSERT(client.connect(HOST));
     TEST_ASSERT(client.login(USERNAME, PASSWORD));
 
@@ -106,7 +106,7 @@ main(void)
 
     try {
       ++testsExecuted;
-      testFunc(client, localTemp);
+      testFunc(client, localTemp, serverTemp);
       // If no exception thrown, test passes.
       ++testsPassed;
       LOG("PASSED");
