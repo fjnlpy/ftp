@@ -3,7 +3,28 @@
 #include <regex>
 
 namespace {
-  constexpr auto DELIM = "\r\n";
+
+constexpr auto DELIM = "\r\n";
+
+std::optional<std::string>
+sendCommandAndReceiveReply(io::Socket &controlSocket, const std::string &command)
+{
+  const auto commandWithDelim(command + DELIM);
+  size_t n = controlSocket.sendString(commandWithDelim);
+  if (n < commandWithDelim.size()) {
+    return {};
+  }
+
+  const auto maybeResponse = controlSocket.readUntil(DELIM);
+  if (!maybeResponse || maybeResponse->size() < 3) {
+    return {};
+  }
+
+  // Note that the response must be at least three characters long,
+  // so it's safe for callees to check e.g. `response.substr(0,3) == "101"`.
+  return *maybeResponse;
+}
+
 }
 
 namespace fsm {
@@ -13,38 +34,26 @@ oneStepFsm(
   io::Socket &controlSocket,
   const std::string &command
 ) {
-  const auto commandWithDelim(command + DELIM);
-  size_t n = controlSocket.sendString(commandWithDelim);
-  if (n < commandWithDelim.size()) {
-    return false;
+  if (auto reply = sendCommandAndReceiveReply(controlSocket, command)) {
+    return (*reply)[0] == '2';
+  } else {
+    return {};
   }
-
-  const auto maybeResponse = controlSocket.readUntil(DELIM);
-  if (!maybeResponse || maybeResponse->size() == 0) {
-    return false;
-  }
-
-  return (*maybeResponse)[0] == '2';
 }
 
 std::optional<std::pair<std::string, std::string>>
 pasvFsm(io::Socket &controlSocket)
 {
   // Send the command wait for a response.
-  const auto pasvCommand(std::string("PASV") + DELIM);
-  size_t n = controlSocket.sendString(pasvCommand);
-  if (n < pasvCommand.size()) {
-    return {};
-  }
-  const auto maybeResponse = controlSocket.readUntil(DELIM);
+  const auto maybeResponse = sendCommandAndReceiveReply(controlSocket, std::string("PASV") + DELIM);
   if (!maybeResponse) {
     return {};
   }
   const auto &response = *maybeResponse;
 
   // Check that we got a positive response. If so, we can parse it for connection information.
-  if (response.size() < 3 || response.substr(0, 3) != "227") {
-    // The PASV request failed (or was malformed) so there won't be any connection information.
+  if (response.substr(0, 3) != "227") {
+    // The PASV request failed so there won't be any connection information.
     return {};
   }
 
