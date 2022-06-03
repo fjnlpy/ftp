@@ -50,6 +50,7 @@ try {
     // Remove the delim because it's not part of the response.
     output.erase(output.end() - delim.size(), output.end());
   }
+  LOG(output);
   return output;
 } catch (const std::exception &e) {
   return {};
