@@ -64,12 +64,12 @@ auto tests = std::unordered_map<std::string, TestFunction> {
     const auto maybeRoot = client.pwd();
     TEST_ASSERT(maybeRoot && *maybeRoot == "/");
 
-    // Change to home.
-    TEST_ASSERT(client.cwd("home"));
+    // Change to temp.
+    TEST_ASSERT(client.cwd("temp"));
 
-    // Now should be in /home.
-    const auto maybeHome = client.pwd();
-    TEST_ASSERT(maybeHome && *maybeHome == "/home");
+    // Now should be in /temp.
+    const auto maybeTemp = client.pwd();
+    TEST_ASSERT(maybeTemp && *maybeTemp == "/temp");
   }
   },
 
