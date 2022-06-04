@@ -203,7 +203,6 @@ Client::cwd(const std::string &newDir)
 std::optional<std::string>
 Client::mkd(const std::string &newDir)
 {
-  // TODO: fails if it already exists -- expected?
   return fsm::directoryFsm(controlSocket_, newDir);
 }
 
