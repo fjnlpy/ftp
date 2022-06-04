@@ -136,8 +136,31 @@ auto tests = std::unordered_map<std::string, TestFunction> {
     const auto newDir(serverTemp/"newdir");
     TEST_ASSERT(exists(newDir) && is_directory(newDir));
   }
-  }
+  },
 
+  {"Test Noop",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    TEST_ASSERT(client.noop());
+  }
+  },
+
+  { "Test quit",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    TEST_ASSERT(client.quit());
+  }
+  },
+
+  { "Test quit while not logged in",
+  [](Client &client, const path &, const path &) {
+    // Don't log in; quit should fail if not logged in.
+
+    TEST_ASSERT(!client.quit());
+  }
+  }
 };
 }
 
