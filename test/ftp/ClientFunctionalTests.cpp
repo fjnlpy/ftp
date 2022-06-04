@@ -78,6 +78,22 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   }
   },
 
+  { "Test CWD not logged in",
+  [](Client &client, const path &, const path &) {
+    // Don't log in; should be unable to change directory.
+
+    TEST_ASSERT(!client.cwd("temp"));
+  }
+  },
+
+  { "Test CWD invalid directory",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    TEST_ASSERT(!client.cwd("NotARealDirectory"));
+  }
+  },
+
   { "Test upload big file",
   [](Client &client, const path &, const path &serverTemp) {
     assertConnectAndLogin(client);
