@@ -138,6 +138,15 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   }
   },
 
+  { "Test MKD directory already exists",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    // Temp should already exist because the test infrastructure creates it.
+    TEST_ASSERT(!client.mkd("temp"));
+  }
+  },
+
   {"Test Noop",
   [](Client &client, const path &, const path &) {
     assertConnectAndLogin(client);
