@@ -60,7 +60,6 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   },
 
   // TODO: test logging in, once it actually checks for failure
-  // TODO: test mkd -- how to delete the new directory afterwards?
 
   { "Test change and print directory",
   [](Client &client, const path &, const path &) {
