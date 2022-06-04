@@ -98,15 +98,31 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   }
   },
 
-  { "Test upload big file",
+  { "Test upload 2049 byte file",
   [](Client &client, const path &, const path &serverTemp) {
+    // 2049 because that's one larger than a multiple of the block size we use.
+    // Make sure the extra byte is still sent.
     assertConnectAndLogin(client);
 
-    TEST_ASSERT(client.stor("scratch/files/bigfile.txt", "temp/uploadedfile.txt"));
+    TEST_ASSERT(client.stor("scratch/files/bigfile-2049.txt", "temp/uploadedfile.txt"));
 
     const auto uploadedFile(serverTemp/"uploadedfile.txt");
     // bigfile contains 2049 bytes; uploadedFile should be the same size.
     TEST_ASSERT(exists(uploadedFile) && file_size(uploadedFile) == 2049);
+  }
+  },
+
+    { "Test upload 2048 byte file",
+  [](Client &client, const path &, const path &serverTemp) {
+    // 2048 because that's equal to the block size we use.
+    // Make sure the loop still terminates with a zero byte-read eof.
+    assertConnectAndLogin(client);
+
+    TEST_ASSERT(client.stor("scratch/files/bigfile-2048.txt", "temp/uploadedfile.txt"));
+
+    const auto uploadedFile(serverTemp/"uploadedfile.txt");
+    // bigfile contains 2048 bytes; uploadedFile should be the same size.
+    TEST_ASSERT(exists(uploadedFile) && file_size(uploadedFile) == 2048);
   }
   },
 
