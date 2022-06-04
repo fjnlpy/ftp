@@ -12,8 +12,9 @@
 
 #define TEST_ASSERT(e) throwIfFalse(e, __LINE__)
 
-using std::filesystem::path;
-using std::filesystem::directory_iterator;
+namespace fs = std::filesystem;
+using fs::path;
+
 using ftp::Client;
 using TestFunction = void(*)(Client&, const path&, const path&);
 
@@ -36,8 +37,8 @@ void
 remove_all_inside(const path &dir)
 {
   assert(is_directory(dir));
-  for (const auto& entry : directory_iterator(dir)) {
-    std::filesystem::remove_all(entry);
+  for (const auto& entry : fs::directory_iterator(dir)) {
+    fs::remove_all(entry);
   }
 }
 
