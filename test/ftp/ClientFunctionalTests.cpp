@@ -3,6 +3,9 @@
 #include <sstream>
 #include <stdexcept>
 #include <filesystem>
+#include <fstream>
+#include <vector>
+#include <algorithm>
 
 #include "util/util.hpp"
 #include "ftp/Client.h"
@@ -191,7 +194,15 @@ main(void)
     return -1;
   }
 
+
+  const std::vector<std::string> testAllowList{};
+
+
   for (const auto &[name, testFunc] : tests) {
+    if (!testAllowList.empty() && std::find(testAllowList.cbegin(), testAllowList.cend(), name) == testAllowList.cend()) {
+      // Skip this test because the allow list is populated and this test isn't in it.
+      continue;
+    }
     LOG("");
     LOG("===");
     LOG("Running test: " << name);
