@@ -112,7 +112,7 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   }
   },
 
-    { "Test upload 2048 byte file",
+  { "Test upload 2048 byte file",
   [](Client &client, const path &, const path &serverTemp) {
     // 2048 because that's equal to the block size we use.
     // Make sure the loop still terminates with a zero byte-read eof.
