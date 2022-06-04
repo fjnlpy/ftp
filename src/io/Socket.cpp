@@ -88,7 +88,11 @@ try
 
   // Send 1KB chunks until the stream fails.
   LOG("Sending file: chunkSize=" << chunkSize);
-  while (fileStream.read(buf.data(), chunkSize)) {
+  // Keep looping while the stream is reading data. `read` will return false when it reaches EOF
+  // but if it read any bytes before that (likely) then we will still write them because `gcount`
+  // will be > 0; on the next iteration read will still return false but gcount will be zero and
+  // the loop won't be entered.
+  while (fileStream.read(buf.data(), chunkSize) || fileStream.gcount() > 0) {
     // Assume if anything goes wrong an exception will be thrown i.e. no need
     // to check return value.
     boost::asio::write(boostSocket_, boost::asio::buffer(buf, fileStream.gcount()));
@@ -101,12 +105,6 @@ try
     LOG("File stream did not complete correctly. Stopping.");
     return false;
   } else {
-    LOG("Reached EOF.");
-    // We reached eof. Send any data that was read in the final read operation.
-    if (fileStream.gcount()) {
-      LOG("Sending extra data: gcount=" << fileStream.gcount());
-      boost::asio::write(boostSocket_, boost::asio::buffer(buf, fileStream.gcount()));
-    }
     return true;
   }
 } catch (const std::exception &e) {
