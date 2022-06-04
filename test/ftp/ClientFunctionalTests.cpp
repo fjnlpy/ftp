@@ -38,6 +38,13 @@ remove_all_inside(const path &dir)
   }
 }
 
+void
+assertConnectAndLogin(Client &client)
+{
+  TEST_ASSERT(client.connect(HOST));
+  TEST_ASSERT(client.login(USERNAME, PASSWORD));
+}
+
 
 auto tests = std::unordered_map<std::string, TestFunction> {
   { "Test unknown host",
@@ -57,8 +64,7 @@ auto tests = std::unordered_map<std::string, TestFunction> {
 
   { "Test change and print directory",
   [](Client &client, const path &, const path &) {
-    TEST_ASSERT(client.connect(HOST));
-    TEST_ASSERT(client.login(USERNAME, PASSWORD));
+    assertConnectAndLogin(client);
 
     // Should start at root.
     const auto maybeRoot = client.pwd();
@@ -75,8 +81,7 @@ auto tests = std::unordered_map<std::string, TestFunction> {
 
   { "Test upload big file",
   [](Client &client, const path &, const path &serverTemp) {
-    TEST_ASSERT(client.connect(HOST));
-    TEST_ASSERT(client.login(USERNAME, PASSWORD));
+    assertConnectAndLogin(client);
 
     TEST_ASSERT(client.stor("scratch/files/bigfile.txt", "temp/uploadedfile.txt"));
 
@@ -88,8 +93,7 @@ auto tests = std::unordered_map<std::string, TestFunction> {
 
   { "Test download big file",
   [](Client &client, const path &localTemp, const path &) {
-    TEST_ASSERT(client.connect(HOST));
-    TEST_ASSERT(client.login(USERNAME, PASSWORD));
+    assertConnectAndLogin(client);
 
     const auto downloadedFile(localTemp/"downloadedfile.txt");
     TEST_ASSERT(client.retr("files/bigfile.txt", downloadedFile));
@@ -100,8 +104,7 @@ auto tests = std::unordered_map<std::string, TestFunction> {
 
   { "Test make directory",
   [](Client &client, const path &, const path &serverTemp) {
-    TEST_ASSERT(client.connect(HOST));
-    TEST_ASSERT(client.login(USERNAME, PASSWORD));
+    assertConnectAndLogin(client);
 
     // This should fail because newdir doesn't exist.
     TEST_ASSERT(!client.cwd("temp/newdir"));
