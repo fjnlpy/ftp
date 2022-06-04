@@ -47,6 +47,8 @@ public:
 
   std::optional<std::string> mkd(const std::string &newDir);
 
+  bool dele(const std::string &fileToDelete);
+
 private:
 
   io::Socket controlSocket_;

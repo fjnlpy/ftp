@@ -172,6 +172,46 @@ auto tests = std::unordered_map<std::string, TestFunction> {
 
     TEST_ASSERT(!client.quit());
   }
+  },
+
+  { "Test delete",
+  [](Client &client, const path &, const path &serverTemp) {
+    assertConnectAndLogin(client);
+
+    const auto newFile(serverTemp/"newfile");
+
+    // This should create a new file.
+    TEST_ASSERT(std::ofstream(newFile));
+    TEST_ASSERT(exists(newFile));
+
+    TEST_ASSERT(client.dele("temp/newfile"));
+
+    TEST_ASSERT(!exists(newFile));
+  }
+  },
+
+  { "Test upload and delete",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    TEST_ASSERT(client.stor("scratch/files/file.txt", "temp/file.txt"));
+
+    // Checks there's no specific issues with deleting a file that was created
+    // via upload.
+    TEST_ASSERT(client.dele("temp/file.txt"));
+  }
+  },
+
+  { "Test can't use DELE on a directory",
+  [](Client &client, const path &, const path &serverTemp) {
+    assertConnectAndLogin(client);
+
+    TEST_ASSERT(create_directory(serverTemp/"newDir"));
+
+    // We shouldn't be allowed to delete directories with this command.
+    client.dele("temp/newDir");
+
+  }
   }
 };
 }
