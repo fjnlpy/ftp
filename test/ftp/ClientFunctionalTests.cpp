@@ -137,6 +137,17 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   }
   },
 
+  // { "Test download really big file",
+  // [](Client &client, const path &localTemp, const path &) {
+  //   assertConnectAndLogin(client);
+
+  //   const auto downloadedFile(localTemp/"downloadedfile.txt");
+  //   TEST_ASSERT(client.retr("files/reallybigfile.txt", downloadedFile));
+
+  //   TEST_ASSERT(exists(downloadedFile) && file_size(downloadedFile) == 1000 * 1024 * 1024);
+  // }
+  // },
+
   { "Test make directory",
   [](Client &client, const path &, const path &serverTemp) {
     assertConnectAndLogin(client);
