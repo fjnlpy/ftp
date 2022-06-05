@@ -237,7 +237,7 @@ auto tests = std::unordered_map<std::string, TestFunction> {
     TEST_ASSERT(create_directory(serverTemp/"newDir"));
 
     // We shouldn't be allowed to delete directories with this command.
-    client.dele("temp/newDir");
+    TEST_ASSERT(!client.dele("temp/newDir"));
 
   }
   }
