@@ -212,6 +212,12 @@ Client::dele(const std::string &fileToDelete)
   return fsm::oneStepFsm(controlSocket_, std::string("DELE ") + fileToDelete);
 }
 
+bool
+Client::rmd(const std::string &dirToDelete)
+{
+  return fsm::oneStepFsm(controlSocket_, std::string("RMD ") + dirToDelete);
+}
+
 std::optional<io::Socket>
 Client::setupDataConnection()
 {

@@ -240,7 +240,65 @@ auto tests = std::unordered_map<std::string, TestFunction> {
     TEST_ASSERT(!client.dele("temp/newDir"));
 
   }
+  },
+
+  { "Test rmd",
+  [](Client &client, const path &, const path &serverTemp) {
+    assertConnectAndLogin(client);
+
+    const auto newDir(serverTemp/"newdir");
+
+    TEST_ASSERT(fs::create_directory(newDir));
+
+    TEST_ASSERT(client.rmd("temp/newdir"));
+
+    TEST_ASSERT(!exists(newDir));
   }
+  },
+
+  { "Test mkd and rmd",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    TEST_ASSERT(client.mkd("temp/newdir"));
+
+    // Checks there's no specific issues with removing a directory that
+    // has been created via mkd.
+    TEST_ASSERT(client.rmd("temp/newdir"));
+  }
+  },
+
+  { "Test can't use rmd on a file",
+  [](Client &client, const path &, const path &serverTemp) {
+    assertConnectAndLogin(client);
+
+    const auto newFile(serverTemp/"newfile.txt");
+
+    TEST_ASSERT(std::ofstream(newFile));
+    TEST_ASSERT(exists(newFile));
+
+    // Shouldn't work because we can only remove directories with rmd.
+    TEST_ASSERT(!client.rmd("temp/newfile.txt"));
+  }
+  },
+
+  { "Test rmd directory which contains a file",
+  [](Client &client, const path &, const path &serverTemp) {
+    assertConnectAndLogin(client);
+
+    const auto newDir(serverTemp/"newdir");
+    const auto newFile(newDir/"newfile.txt");
+
+    TEST_ASSERT(fs::create_directory(newDir));
+    TEST_ASSERT(std::ofstream(newFile));
+    TEST_ASSERT(exists(newFile));
+
+    // This is not allowed for the server I am using. Apparently some servers
+    // do support this.
+    TEST_ASSERT(!client.rmd("temp/newdir/newfile.txt"));
+  }
+  }
+
 };
 }
 

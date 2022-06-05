@@ -49,6 +49,8 @@ public:
 
   bool dele(const std::string &fileToDelete);
 
+  bool rmd(const std::string &dirToDelete);
+
 private:
 
   io::Socket controlSocket_;
