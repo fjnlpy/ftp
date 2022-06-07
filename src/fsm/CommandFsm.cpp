@@ -117,4 +117,33 @@ directoryFsm(io::Socket &controlSocket, const std::optional<std::string> &path)
   }
 }
 
+// Note: for this Fsm, RFC 959 says "[these commands] expect
+// (some may require) 100 series replies" but the only command for this
+// Fsm that does not require a 100 series reply is REIN, and we aren't
+// exposing REIN, so assume that a 100 series reply is required.
+bool
+twoStepFsm(
+  io::Socket &controlSocket,
+  const std::string &command,
+  const Callback &onPreliminaryReply
+) {
+
+  // Send the command, after which we should be told to wait.
+  const auto firstReply = sendCommandAndReceiveReply(controlSocket, command);
+  // As explained above, assume we will receive a 1xx reply.
+  if (!firstReply || (*firstReply)[0] != '1') {
+    return {};
+  }
+
+  // Let the caller know we received a 1xx; they may need to
+  // do something with a data connection.
+  onPreliminaryReply();
+
+  // Server will send the second reply unprompted. For commands
+  // that use a data connection, the reply comes when that
+  // connection is closed.
+  const auto secondReply = controlSocket.readUntil(DELIM);
+  return secondReply && secondReply->size() > 0 && (*secondReply)[0] == '2';
+}
+
 }

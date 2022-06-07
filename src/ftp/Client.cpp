@@ -90,37 +90,33 @@ try {
   }
   io::Socket &dataSocket = *maybeDataSocket;
 
-  // Send a store request and see if the server will accept.
-  std::ostringstream storCommand;
-  storCommand << "STOR " << serverDest << "\r\n";
-  controlSocket_.sendString(storCommand.str());
-  const auto storResponse = controlSocket_.readUntil("\r\n");
-  // a 1xx reply means we can proceed. Anything else means the server won't accept our file.
-  if (!storResponse || storResponse->size() == 0 || (*storResponse)[0] != '1') {
-    return false;
-  }
+  // Lambda for sending the file; called if/when the server responds
+  // with a 1xx.
+  bool isSent = false;
+  const auto onPreliminaryReply = [&dataSocket, &path, &isSent]() {
+    // Try and send the file over the data connection.
+    isSent = dataSocket.sendFile(path);
 
-  // Try and send the file over the data connection.
-  bool isSent = dataSocket.sendFile(path);
-  LOG("File sent across data socket: isSent=" << (isSent ? "true" : "false"));
+    // Close data connection.
+    // The server should close this on its end but the io::Socket will still be
+    // open until it's explicitly closed on our end.
+    if (dataSocket.isOpen()) {
+      dataSocket.close();
+    }
+  };
 
-  // Close data coonection if not closed, and read the server's response.
-  // We need to close explicitly here in case the file-sending failed but the connection remained
-  // open. Otherwise, the server won't say anything on the control connection.
-  // Note if we do that the server may consider the upload to have succeeded and send a positive
-  // response (e.g. if we partially sent the file).
-  if (dataSocket.isOpen()) {
-    LOG("Data connection still open. Closing.");
-    dataSocket.close();
-  }
-  const auto fileSendResponse = controlSocket_.readUntil("\r\n");
+  // Send the request.
+  const bool isServerHappy = fsm::twoStepFsm(
+    controlSocket_,
+    std::string("STOR ") + serverDest,
+    onPreliminaryReply
+  );
+
   // TODO: what if something goes wrong on our end after we've sent some bytes, and the server thinks
   // we've sent the whole file and so sends a positive response? Do we then tell it to delete the
   // file?
-  return isSent
-    && fileSendResponse
-    && fileSendResponse->size() > 0
-    && (*fileSendResponse)[0] == '2';
+  // Succeed if nothing went wrong on our end and the server gave a positive response.
+  return isSent && isServerHappy;
 } catch (const std::filesystem::filesystem_error &e) {
   return false;
 }
@@ -142,7 +138,6 @@ try {
   const std::filesystem::path parentPath = destPath.parent_path();
   const bool isValidDest = exists(parentPath) && is_directory(parentPath) && !exists(destPath);
   if (!isValidDest) {
-    LOG("Not a valid destination: " << localDest);
     return false;
   }
 
@@ -153,30 +148,27 @@ try {
   }
   io::Socket &dataSocket = *maybeDataSocket;
 
-  // Send RETR request and view the response.
+  // This lambda is called if/when we receive a 1xx reply from the server.
+  bool isReceived = false;
+  const auto onPreliminaryReply = [&dataSocket, &destPath, &isReceived]() {
+    // Save the data arriving on the data socket until it is closed by the server.
+    isReceived = dataSocket.retrieveFile(destPath);
+    // The connection should still be open here, regardless of whether or not we received an EOF.
+    // Close it to make sure the server knows we've finished reading. If the server had sent an EOF
+    // then it will probably think the transfer succeeded but we also need to check that there were
+    // no errors on our end. Conversely, if the server sends an EOF and everything went well on our
+    // end it doesn't necessarily mean the  transfer succeeded as something may have gone wrong
+    // on the server's end.
+    dataSocket.close();
+  };
+
+  // Try to retrieve the file from the server.
   // This may fail if e.g. we don't permission or the file doesn't exist on the server.
-  std::ostringstream retrCommand;
-  retrCommand << "RETR " << serverSrc << "\r\n";
-  controlSocket_.sendString(retrCommand.str());
-  const auto retrResponse = controlSocket_.readUntil("\r\n");
-  if (!retrResponse || retrResponse->size() == 0 || (*retrResponse)[0] != '1') {
-    return false;
-  }
-
-  // Save the data arriving on the data socket until it is closed by the server.
-  bool isReceived = dataSocket.retrieveFile(localDest);
-  // The connection should still be open here, regardless of whether or not we received an EOF.
-  // Close it to make sure the server knows we've finished reading. If the server had sent an EOF
-  // then it will probably think the transfer succeeded but we also need to check that there were
-  // no errors on our end. Conversely, if the server sends an EOF and everything went well on our
-  // end it doesn't necessarily mean the  transfer succeeded as something may have gone wrong
-  // on the server's end.
-  dataSocket.close();
-
-  // Receive confirmation / error info from server.
-  const auto transferResponse = controlSocket_.readUntil("\r\n");
-  const bool isServerHappy =
-    transferResponse && transferResponse->size() > 0 && (*transferResponse)[0] == '2';
+  const bool isServerHappy = fsm::twoStepFsm(
+    controlSocket_,
+    std::string("RETR ") + serverSrc,
+    onPreliminaryReply
+  );
 
   // Extra sanity check: the file should exist at the destination now.
   const bool isFileAtDestination = exists(destPath);
