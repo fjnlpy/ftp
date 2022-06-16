@@ -210,6 +210,66 @@ Client::rmd(const std::string &dirToDelete)
   return fsm::oneStepFsm(controlSocket_, std::string("RMD ") + dirToDelete);
 }
 
+std::optional<std::string>
+Client::list(const std::string &dirToList)
+{
+  return list(std::make_optional(dirToList));
+}
+
+std::optional<std::string>
+Client::list()
+{
+  return list(std::nullopt);
+}
+
+std::optional<std::string>
+Client::list(const std::optional<std::reference_wrapper<const std::string>> &maybeDirToList)
+{
+  // Assume the output fits sensibly into a string. If there were many directories in the
+  // output, this would not be reasonable. Ideally, we should truncate the output if it's
+  // above a certain size.
+  std::optional<std::string> maybeListOutput;
+
+  // Construct command depending on whether user specified a directory explicitly.
+  // If not, the server should assume they want to list the current directory.
+  std::string command("LIST ");
+  if (maybeDirToList) {
+    command.append(*maybeDirToList);
+  }
+
+  // Set up data connection. Note the original ftp says we should use the ASCII transfer type
+  // for list commands but we will assume the server is robust to any transfer type (specifically
+  // to image type, which we use everywhere else). It shouldn't matter to the server or to us
+  // because we just print the data we receive as a string; we don't need to interpret it.
+  auto maybeDataSocket = setupDataConnection();
+  if (!maybeDataSocket) {
+    return {};
+  }
+  io::Socket &dataSocket = *maybeDataSocket;
+
+  const auto onPreliminaryReply = [&maybeListOutput, &dataSocket]() {
+    // Got to be a bit careful here to ensure the list output
+    // doesn't get destroyed.
+    maybeListOutput = std::move(dataSocket.readUntil("\r\n"));
+
+    // FIXME: readUntil fails because it reaches eof before seeing \r\n. Probably
+    //    there's no \r\n because it's sent over the data socket.
+    // FIXME: readUntil won't cut it. Refactor receiveFile to call into
+    //   receiveToStream, which is also exposed. Then pass a stringstream
+    //   into that and receive the input that way.
+    LOG((maybeListOutput ? *maybeListOutput : "NONE"));
+
+    if (dataSocket.isOpen()) {
+      dataSocket.close();
+    }
+  };
+
+  // Send request and return response.
+  fsm::twoStepFsm(controlSocket_, command, onPreliminaryReply);
+
+  return maybeListOutput;
+}
+
 std::optional<io::Socket>
 Client::setupDataConnection()
 {

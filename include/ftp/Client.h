@@ -2,6 +2,7 @@
 #define FTP_CLIENT_H
 
 #include <string>
+#include <functional>
 
 #include "io/Socket.h"
 
@@ -51,12 +52,17 @@ public:
 
   bool rmd(const std::string &dirToDelete);
 
+  std::optional<std::string> list(const std::string &dirToList);
+
+  std::optional<std::string> list();
+
 private:
 
   io::Socket controlSocket_;
 
   std::optional<io::Socket> setupDataConnection();
 
+  std::optional<std::string> list(const std::optional<std::reference_wrapper<const std::string>>&);
 };
 
 }
