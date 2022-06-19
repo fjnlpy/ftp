@@ -228,7 +228,7 @@ Client::list(const std::optional<std::reference_wrapper<const std::string>> &may
   // Assume the output fits sensibly into a string. If there were many directories in the
   // output, this would not be reasonable. Ideally, we should truncate the output if it's
   // above a certain size.
-  std::optional<std::string> maybeListOutput;
+  std::optional<std::string> maybeListOutput(std::nullopt);
 
   // Construct command depending on whether user specified a directory explicitly.
   // If not, the server should assume they want to list the current directory.
@@ -248,16 +248,18 @@ Client::list(const std::optional<std::reference_wrapper<const std::string>> &may
   io::Socket &dataSocket = *maybeDataSocket;
 
   const auto onPreliminaryReply = [&maybeListOutput, &dataSocket]() {
-    // Got to be a bit careful here to ensure the list output
-    // doesn't get destroyed.
-    maybeListOutput = std::move(dataSocket.readUntil("\r\n"));
+    std::stringstream outputStream;
 
-    // FIXME: readUntil fails because it reaches eof before seeing \r\n. Probably
-    //    there's no \r\n because it's sent over the data socket.
-    // FIXME: readUntil won't cut it. Refactor receiveFile to call into
-    //   receiveToStream, which is also exposed. Then pass a stringstream
-    //   into that and receive the input that way.
-    LOG((maybeListOutput ? *maybeListOutput : "NONE"));
+    bool isSuccess = dataSocket.retrieveToStream(outputStream);
+    if (isSuccess) {
+      // It would be nice to do std::move(outputStream).str() here
+      // to move assign the output from the string stream. Unfortunately,
+      // that's not possible until C++20, which means we have to make
+      // a copy of the (potentially large) string that is placed in
+      // the stringstream by the socket operation.
+      // I don't know a workaround for this that works with output streams.
+      maybeListOutput = outputStream.str();
+    }
 
     if (dataSocket.isOpen()) {
       dataSocket.close();
