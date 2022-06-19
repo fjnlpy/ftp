@@ -76,50 +76,14 @@ Client::quit()
 
 bool
 Client::stor(const std::string &localSrc, const std::string &serverDest)
-{ // TODO: try-catch still needed?
-try {
-  std::filesystem::path path(localSrc);
-  if (!exists(path)) {
-    return false;
-  }
-
-  // Try and set up data connection.
-  auto maybeDataSocket = setupDataConnection();
-  if (!maybeDataSocket) {
-    return false;
-  }
-  io::Socket &dataSocket = *maybeDataSocket;
-
-  // Lambda for sending the file; called if/when the server responds
-  // with a 1xx.
-  bool isSent = false;
-  const auto onPreliminaryReply = [&dataSocket, &path, &isSent]() {
-    // Try and send the file over the data connection.
-    isSent = dataSocket.sendFile(path);
-
-    // Close data connection.
-    // The server should close this on its end but the io::Socket will still be
-    // open until it's explicitly closed on our end.
-    if (dataSocket.isOpen()) {
-      dataSocket.close();
-    }
-  };
-
-  // Send the request.
-  const bool isServerHappy = fsm::twoStepFsm(
-    controlSocket_,
-    std::string("STOR ") + serverDest,
-    onPreliminaryReply
-  );
-
-  // TODO: what if something goes wrong on our end after we've sent some bytes, and the server thinks
-  // we've sent the whole file and so sends a positive response? Do we then tell it to delete the
-  // file?
-  // Succeed if nothing went wrong on our end and the server gave a positive response.
-  return isSent && isServerHappy;
-} catch (const std::filesystem::filesystem_error &e) {
-  return false;
+{
+  return storOrAppe(localSrc, serverDest, false);
 }
+
+bool
+Client::appe(const std::string &localSrc, const std::string &serverDest)
+{
+  return storOrAppe(localSrc, serverDest, true);
 }
 
 bool
@@ -302,4 +266,54 @@ Client::setupDataConnection()
   LOG("Data socket connected.");
   return dataSocket;
 }
+
+bool
+Client::storOrAppe(const std::string &localSrc, const std::string &serverDest, bool isAppendOperation)
+{ // TODO: try-catch still needed?
+try {
+  std::filesystem::path path(localSrc);
+  if (!exists(path)) {
+    return false;
+  }
+
+  // Try and set up data connection.
+  auto maybeDataSocket = setupDataConnection();
+  if (!maybeDataSocket) {
+    return false;
+  }
+  io::Socket &dataSocket = *maybeDataSocket;
+
+  // Lambda for sending the file; called if/when the server responds
+  // with a 1xx.
+  bool isSent = false;
+  const auto onPreliminaryReply = [&dataSocket, &path, &isSent]() {
+    // Try and send the file over the data connection.
+    isSent = dataSocket.sendFile(path);
+
+    // Close data connection.
+    // The server should close this on its end but the io::Socket will still be
+    // open until it's explicitly closed on our end.
+    if (dataSocket.isOpen()) {
+      dataSocket.close();
+    }
+  };
+
+  // Send the request, using either append mode or overwrite mode depending on
+  // the argument.
+  const bool isServerHappy = fsm::twoStepFsm(
+    controlSocket_,
+    std::string(isAppendOperation ? "APPE " : "STOR ") + serverDest,
+    onPreliminaryReply
+  );
+
+  // TODO: what if something goes wrong on our end after we've sent some bytes, and the server thinks
+  // we've sent the whole file and so sends a positive response? Do we then tell it to delete the
+  // file?
+  // Succeed if nothing went wrong on our end and the server gave a positive response.
+  return isSent && isServerHappy;
+} catch (const std::filesystem::filesystem_error &e) {
+  return false;
+}
+}
+
 }

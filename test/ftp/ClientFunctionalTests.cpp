@@ -360,6 +360,23 @@ auto tests = std::unordered_map<std::string, TestFunction> {
   // }
   // }
 
+  { "Test append",
+  [](Client &client, const path &, const path &serverTemp) {
+    const path fileToUpload("scratch/files/bigfile-2049.txt");
+    assert(exists(fileToUpload));
+    assertConnectAndLogin(client);
+
+    // First upload should create a new file.
+    const auto uploadedFile(serverTemp/"newfile.txt");
+    TEST_ASSERT(client.appe(fileToUpload, "temp/newfile.txt"));
+    TEST_ASSERT(exists(uploadedFile) && file_size(uploadedFile) == 2049);
+
+    // Second upload should append.
+    TEST_ASSERT(client.appe(fileToUpload, "temp/newfile.txt"));
+    TEST_ASSERT(exists(uploadedFile) && file_size(uploadedFile) == 2 * 2049);
+  }
+  }
+
 };
 }
 

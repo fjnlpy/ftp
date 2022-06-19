@@ -40,6 +40,8 @@ public:
 
   bool stor(const std::string &localSrc, const std::string &serverDest);
 
+  bool appe(const std::string &localSrc, const std::string &serverDest);
+
   bool retr(const std::string &serverSrc, const std::string &localDest);
 
   std::optional<std::string> pwd();
@@ -63,6 +65,8 @@ private:
   std::optional<io::Socket> setupDataConnection();
 
   std::optional<std::string> list(const std::optional<std::reference_wrapper<const std::string>>&);
+
+  bool storOrAppe(const std::string &localSrc, const std::string &serverDest, bool isAppendOperation);
 };
 
 }
