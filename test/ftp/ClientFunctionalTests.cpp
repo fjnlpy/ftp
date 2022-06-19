@@ -297,7 +297,68 @@ auto tests = std::unordered_map<std::string, TestFunction> {
     // do support this.
     TEST_ASSERT(!client.rmd("temp/newdir/newfile.txt"));
   }
+  },
+
+  { "Test list empty directory",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    // The server temp dir should be empty already.
+    client.cwd("temp");
+
+    const auto maybeList = client.list();
+    TEST_ASSERT(maybeList);
+    TEST_ASSERT(*maybeList == "");
   }
+  },
+
+  { "Test list non-empty directory via no args",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    // The files directory should be non-empty.
+    client.cwd("files");
+
+    const auto maybeList = client.list();
+    TEST_ASSERT(maybeList);
+    LOG(*maybeList);
+
+    // Check that the output has two lines. The output can be quite complicated,
+    // and doesn't have a fixed format, so I think it's only practical to
+    // assume that the output will have one line per file, and that if the number
+    // if files is correct then whether the output is correct is up to the server
+    // (assuming we haven't wrongly decoded it).
+    TEST_ASSERT(std::count(maybeList->cbegin(), maybeList->cend(), '\n') == 2);
+  }
+  },
+
+  { "Test list non-empty directory via path",
+  [](Client &client, const path &, const path &) {
+    assertConnectAndLogin(client);
+
+    const auto maybeList = client.list("files");
+    TEST_ASSERT(maybeList);
+    LOG(*maybeList);
+
+    TEST_ASSERT(std::count(maybeList->cbegin(), maybeList->cend(), '\n') == 2);
+  }
+  },
+
+  // Annoyingly, vsftpd seems to send an empty string when a client tries to
+  // list a directly that doesn't exist.
+  //
+  // { "Test list non-existent dir",
+  // [](Client &client, const path &, const path &serverTemp) {
+  //   constexpr const auto DIR_NAME = "myDirWhichDoesNotExist";
+  //   assert(!exists(serverTemp/DIR_NAME));
+  //
+  //   assertConnectAndLogin(client);
+  //
+  //   // ~~Should receive a null optional if the dir doesn't exist.~~
+  //   LOG(*client.list(std::string("temp/") + DIR_NAME));
+  //   TEST_ASSERT(!true);
+  // }
+  // }
 
 };
 }
@@ -321,7 +382,9 @@ main(void)
   }
 
 
-  const std::vector<std::string> testAllowList{};
+  const std::vector<std::string> testAllowList{
+
+  };
 
 
   for (const auto &[name, testFunc] : tests) {
@@ -334,7 +397,7 @@ main(void)
     LOG("Running test: " << name);
     LOG("---");
     Client client;
-    
+
     remove_all_inside(localTemp);
     remove_all_inside(serverTemp);
 
