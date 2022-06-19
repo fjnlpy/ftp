@@ -375,8 +375,47 @@ auto tests = std::unordered_map<std::string, TestFunction> {
     TEST_ASSERT(client.appe(fileToUpload, "temp/newfile.txt"));
     TEST_ASSERT(exists(uploadedFile) && file_size(uploadedFile) == 2 * 2049);
   }
-  }
+  },
 
+  { "Test rename",
+  [](Client &client, const path &, const path &serverTemp) {
+    assertConnectAndLogin(client);
+
+    const path fileToRename(serverTemp/"oldfilename.txt");
+    // Create the temp file.
+    TEST_ASSERT(std::ofstream(fileToRename));
+
+    TEST_ASSERT(client.rename("temp/oldfilename.txt", "temp/newfilename.txt"));
+
+    const path renamedFile(serverTemp/"newfilename.txt");
+    TEST_ASSERT(exists(renamedFile));
+    TEST_ASSERT(!exists(fileToRename));
+  }
+  },
+
+  { "Test rename of non-existent file",
+  [](Client &client, const path &, const path &serverTemp) {
+    assertConnectAndLogin(client);
+
+    const path fileToRename(serverTemp/"myFileWhichDoesNotExist.txt");
+    TEST_ASSERT(!exists(fileToRename));
+
+    TEST_ASSERT(!client.rename("temp/myFileWhichDoesNotExist.txt", "temp/myNewName.txt"));
+  }
+  },
+
+  { "Test rename file to itself",
+  [](Client &client, const path &, const path &serverTemp) {
+    assertConnectAndLogin(client);
+
+    const path fileToRename(serverTemp/"newfile.txt");
+    // Create the file.
+    TEST_ASSERT(std::ofstream(fileToRename));
+
+    // Not really something on our end, but interesting to test.
+    TEST_ASSERT(client.rename("temp/newfile.txt", "temp/newfile.txt"));
+  }
+  }
 };
 }
 

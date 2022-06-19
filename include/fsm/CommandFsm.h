@@ -34,6 +34,13 @@ twoStepFsm(
   const Callback &onPreliminaryReply
 );
 
+bool
+renameFsm(
+  io::Socket &controlSocket,
+  const std::string &rnfrArgument,
+  const std::string &rntoArgument
+);
+
 }
 
 #endif

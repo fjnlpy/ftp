@@ -58,6 +58,8 @@ public:
 
   std::optional<std::string> list();
 
+  bool rename(const std::string &from, const std::string &to);
+
 private:
 
   io::Socket controlSocket_;

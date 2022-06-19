@@ -146,4 +146,26 @@ twoStepFsm(
   return secondReply && secondReply->size() > 0 && (*secondReply)[0] == '2';
 }
 
+bool
+renameFsm(
+  io::Socket &controlSocket,
+  const std::string &rnfrArgument,
+  const std::string &rntoArgument
+) {
+  const auto firstReply = sendCommandAndReceiveReply(
+    controlSocket,
+    std::string("RNFR ") + rnfrArgument + DELIM
+  );
+  if (!firstReply || (*firstReply)[0] != '3') {
+    // Should receive a 3xx reply, which is prompting us to send the RNTO.
+    return false;
+  }
+
+  const auto secondReply = sendCommandAndReceiveReply(
+    controlSocket,
+    std::string("RNTO ") + rntoArgument + DELIM
+  );
+  return secondReply && (*secondReply)[0] == '2';
+}
+
 }

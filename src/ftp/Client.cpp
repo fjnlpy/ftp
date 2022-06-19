@@ -236,6 +236,12 @@ Client::list(const std::optional<std::reference_wrapper<const std::string>> &may
   return maybeListOutput;
 }
 
+bool
+Client::rename(const std::string &from, const std::string &to)
+{
+  return fsm::renameFsm(controlSocket_, from, to);
+}
+
 std::optional<io::Socket>
 Client::setupDataConnection()
 {
