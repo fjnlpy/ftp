@@ -4,6 +4,7 @@
 #include <utility>
 #include <string>
 #include <filesystem>
+#include <ostream>
 
 #include <boost/asio.hpp>
 
@@ -31,6 +32,8 @@ public:
 
   bool retrieveFile(const std::filesystem::path &filePath);
 
+  bool retrieveToStream(std::ostream &stream);
+
   bool isOpen();
 
   bool close();
@@ -43,6 +46,8 @@ private:
   // conditions.
   static inline boost::asio::io_context boostIoContext_{};
   boost::asio::ip::tcp::socket boostSocket_;
+
+  void retrieveToStreamInternal(std::ostream &stream);
 
 };
 
