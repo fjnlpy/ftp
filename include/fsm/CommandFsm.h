@@ -41,6 +41,14 @@ renameFsm(
   const std::string &rntoArgument
 );
 
+bool
+loginFsm(
+  io::Socket &controlSocket,
+  const std::string &username,
+  const std::optional<std::reference_wrapper<const std::string>> &password,
+  const std::optional<std::reference_wrapper<const std::string>> &account
+);
+
 }
 
 #endif

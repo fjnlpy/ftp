@@ -1,6 +1,7 @@
 #include "fsm/CommandFsm.h"
 
 #include <regex>
+#include <cassert>
 
 namespace {
 
@@ -166,6 +167,89 @@ renameFsm(
     std::string("RNTO ") + rntoArgument + DELIM
   );
   return secondReply && (*secondReply)[0] == '2';
+}
+
+bool
+loginFsm(
+  io::Socket &controlSocket,
+  const std::string &username,
+  const std::optional<std::reference_wrapper<const std::string>> &maybePassword,
+  const std::optional<std::reference_wrapper<const std::string>> &maybeAccount
+) {
+  // It's not possible to provide an account without providing a password.
+  // The RFC 959 login FSM does not support it.
+  assert(!maybeAccount || maybePassword);
+
+  // Send username and check for errors.
+  const auto userReply = sendCommandAndReceiveReply(
+    controlSocket,
+    std::string("USER ") + username + DELIM
+  );
+  if (!userReply) {
+    return false;
+  }
+
+  const auto userReplyCode = (*userReply)[0];
+
+  // If no password specified and we get 2xx response, login succeeded
+  // with just username.
+  if (!maybePassword && userReplyCode == '2') {
+    return true;
+  } 
+  
+  // Otherwise, send the password, even if we got 2xx response.
+  // This is against what the RFC FSM says but we want to be consistent
+  // with the ACCT case below, and it's unlikely for a server to
+  // reject a passworded login if it is willing to accept the same
+  // login without a password.
+
+  if (userReplyCode != '2' && userReplyCode != '3') {
+    return false;
+  }
+
+  const std::string &password = *maybePassword;
+  const auto passwordReply = sendCommandAndReceiveReply(
+    controlSocket,
+    std::string("PASS ") + password + DELIM
+  );
+  if (!passwordReply) {
+    return false;
+  }
+
+  const auto passwordReplyCode = (*passwordReply)[0];
+
+  // If no account info and 2xx reply, login succeeded
+  // with username and password.
+  if (!maybeAccount && passwordReplyCode == '2') {
+    return true;
+  }
+
+  // Otherwise, send account info, even if the server
+  // didn't request it. This is because RFC 959 says
+  // the server is permitted to send a certain response
+  // at a later point if specific account information is
+  // needed at that stage. But we don't parse reply codes
+  // in enough detail to be able to detect that response,
+  // and I'm not confident that servers would be consistent
+  // with their handling of this case (the RFC is not
+  // specific about what is expected on either side).
+  // Instead, expect that the user will know when
+  // they need to provide account information, and
+  // send it immediately if it's provided.
+
+  if (passwordReplyCode != '2' && passwordReplyCode != '3') {
+    return false;
+  }
+
+  const std::string &accountInfo = *maybeAccount;
+  const auto acctReply = sendCommandAndReceiveReply(
+    controlSocket,
+    std::string("ACCT ") + accountInfo + DELIM
+  );
+
+  // No more commands to send now, so succeed if the final one succeeded.
+  // In this case, login succeeded with username, password and account info.
+  return acctReply && (*acctReply)[0] == '2';
 }
 
 }
