@@ -22,7 +22,7 @@ sendCommandAndReceiveReply(io::Socket &controlSocket, const std::string &command
   }
 
   // Note that the response must be at least three characters long,
-  // so it's safe for callees to check e.g. `response.substr(0,3) == "101"`.
+  // so it's safe for callers to check e.g. `response.substr(0,3) == "101"`.
   return *maybeResponse;
 }
 
