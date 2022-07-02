@@ -32,10 +32,11 @@ public:
 
   bool connect(const std::string &url);
 
-  // TODO: other login overloads for username; and username, password, account info
-  // TODO: also refactor existing login code
-  // TODO: write tests
+  bool login(const std::string &username);
+
   bool login(const std::string &username, const std::string &password);
+
+  bool login(const std::string &username, const std::string &password, const std::string &accountName);
 
   bool noop();
 

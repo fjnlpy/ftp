@@ -31,21 +31,26 @@ Client::connect(const std::string &host)
 }
 
 bool
+Client::login(const std::string &username)
+{
+  return fsm::loginFsm(controlSocket_, username, std::nullopt, std::nullopt);
+}
+
+bool
 Client::login(
   const std::string &username,
   const std::string &password
 ) {
-  // TODO: Check for failures.
+  return fsm::loginFsm(controlSocket_, username, password, std::nullopt);
+}
 
-  std::ostringstream usernameCommand;
-  usernameCommand << "USER " << username << "\r\n";
-  controlSocket_.sendString(usernameCommand.str());
-  controlSocket_.readUntil("\r\n");
-
-  std::ostringstream passwordCommand;
-  passwordCommand << "PASS " << password << "\r\n";
-  controlSocket_.sendString(passwordCommand.str());
-  return controlSocket_.readUntil("\r\n").has_value();
+bool
+Client::login(
+  const std::string &username,
+  const std::string &password,
+  const std::string &accountName
+) {
+  return fsm::loginFsm(controlSocket_, username, password, accountName);
 }
 
 bool
