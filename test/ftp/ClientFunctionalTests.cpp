@@ -415,7 +415,45 @@ auto tests = std::unordered_map<std::string, TestFunction> {
     // Not really something on our end, but interesting to test.
     TEST_ASSERT(client.rename("temp/newfile.txt", "temp/newfile.txt"));
   }
+  },
+
+  // There are not as many tests as I'd like for login.
+  // It's difficult to test all the cases because they
+  // require different server configurations.
+  // The tests don't get to specify a server configuration;
+  // they all the same one and are unaware of how it is launched.
+  // It's probably possible to re-launch the server automatically
+  // before each test but I think it's not worth the benefit,
+  // for this simple project.
+
+  { "Test username-only login failure",
+  [](Client &client, const path &, const path &) {
+    TEST_ASSERT(client.connect(HOST));
+
+    // Not a valid username.
+    TEST_ASSERT(!client.login("absjdsfs"));
   }
+  },
+
+  { "Test username & password login succeed",
+  [](Client &client, const path &, const path &) {
+    TEST_ASSERT(client.connect(HOST));
+
+    // These are the same credentials used for the rest of the tests.
+    TEST_ASSERT(client.login("anonymous", "anonymous"));
+  }
+  },
+
+  // Looks like vsftpd doesn't support logging in with account info.
+  // Probably should have checked that before I implemented it -- I guess
+  // it's not used very often...
+  // { "Test username, password & account info login",
+  // [](Client &client, const path &, const path &) {
+  //   TEST_ASSERT(client.connect(HOST));
+
+  //   TEST_ASSERT(client.login("anonymous", "anonymous", "guest"));
+  // }
+  // }
 };
 }
 
