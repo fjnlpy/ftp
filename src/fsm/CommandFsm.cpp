@@ -192,12 +192,12 @@ loginFsm(
   const auto userReplyCode = (*userReply)[0];
 
   // If no password specified and we get 2xx response, login succeeded
-  // with just username.
-  if (!maybePassword && userReplyCode == '2') {
-    return true;
+  // with just username. Otherwise, fail because password is required.
+  if (!maybePassword) {
+    return userReplyCode == '2';
   } 
   
-  // Otherwise, send the password, even if we got 2xx response.
+  // If there is a password, send it, even if we got 2xx response.
   // This is against what the RFC FSM says but we want to be consistent
   // with the ACCT case below, and it's unlikely for a server to
   // reject a passworded login if it is willing to accept the same
@@ -219,12 +219,13 @@ loginFsm(
   const auto passwordReplyCode = (*passwordReply)[0];
 
   // If no account info and 2xx reply, login succeeded
-  // with username and password.
-  if (!maybeAccount && passwordReplyCode == '2') {
-    return true;
+  // with username and password. Otherwise, fail because
+  // account info required
+  if (!maybeAccount) {
+    return passwordReplyCode == '2';
   }
 
-  // Otherwise, send account info, even if the server
+  // If there is account info, send it, even if the server
   // didn't request it. This is because RFC 959 says
   // the server is permitted to send a certain response
   // at a later point if specific account information is
